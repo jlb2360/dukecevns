@@ -1,4 +1,7 @@
 // Mixtures.  Assume add up to 100
+#include <map>
+#include <vector>
+
 
 const int max_components = 15;
 double amu = 931.4940955;
@@ -172,7 +175,7 @@ double mass_fraction[max_components];
   isotopes["Xe132"].push_back("Xe132");
   molar_fraction["Xe132"].push_back(1.0);
 
-   
+
 
 
 

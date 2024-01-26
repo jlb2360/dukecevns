@@ -1,95 +1,17 @@
 #include <cstdlib>
-#include <ctime>
 #include <cstring>
-#include <sstream>
 #include <iostream>
 #include <math.h>
 #include "NuFlux.h"
 
 
-double PiDAR::fluxval(double Enu, int flavor, double ebinsize) 
-{
-    
 
-  // Energies in MeV
-  // 1 = e, 2 = mu
-  //const double mmu = 105.6;
-  const double mmu = 105.66837;
-  //  const double Enumu = 29.9;
-  const double Enumu = 29.792;
-
-  const double a= 2/mmu;
-  double flux = 0.;
-
-  if (Enu>mmu/2.) {
-    flux = 0.;
-    return flux;
-  }
-
-  if (flavor == 1) {
-    flux = norm*12*pow(a*Enu,2)*(1-a*Enu)*a*ebinsize;
-   } else if (flavor == 2) {
-    
-    if (fabs(Enu-Enumu)<ebinsize/2.) {
-      flux = norm;
-    }
-
-  } else if (flavor == -2) {
-     flux = norm*2*pow(a*Enu,2)*(3-2*a*Enu)*a*ebinsize;
-  } else {
-
-    flux = 0.;
-  }
-
-  // Oscillate if requested
-
-  //  std::cout << "1: "<< flux << std::endl;
-  double sin22th;
-  if (doosc==1) {
-    
-    if (abs(flavor) == 1) {
-      sin22th = sin22thes;
-    } else if (abs(flavor) == 2) {
-      sin22th = sin22thmus;
-    }  else if (abs(flavor) == 3) {
-      sin22th = sin22thtaus;
-    } else {
-      sin22th = 0.;
-    }
-
-    // Simple sterile disappearance,  baseline in cm (converted to m in expression), Enu in MeV
-    flux *= (1-sin22th*pow(sin(1.27*dm2*(baseline/100.)/Enu),2));
-
-
-  }
-
-  //  std::cout << 1.-sin22th<<" "<<dm2<<" "<<Enu<<" "<<" "<<baseline<<" "<<pow(sin(1.27*dm2*baseline/Enu),2)<<std::endl;
-  //std::cout << flux << std::endl;
-  
-  return flux;
-
-}
-
-double PiDAR::maxEnu() 
+double Reactor::fluxval(double Enu, int flavor, double ebinsize)
 {
 
-  // Return the maximum energy in MeV
-
-  // To compare with old
-  //  double maxEnu = 105.6/2.;
-  double maxEnu = 105.66837/2.;
-  return maxEnu;
-
-}
-
-////
-
-double Reactor::fluxval(double Enu, int flavor, double ebinsize) 
-{
- 
  // Polynomials from Mueller 2011.  Gives flux in per MeV per fission
   // Output from this function is for the specified ebinsize
-  
+
   // parent array gives the relative contributions from each fissioning parent, which will actually vary with time
 
   double alpha235U[6] = {3.217, -3.111, 1.395, -3.690e-1, 4.445e-2, -2.053e-3};
@@ -113,7 +35,7 @@ double Reactor::fluxval(double Enu, int flavor, double ebinsize)
   double b_241Pu = 2.2021;
 
   // nuebar only
-  if (flavor != -1) { 
+  if (flavor != -1) {
         return 0;
   }
 
@@ -130,7 +52,7 @@ double Reactor::fluxval(double Enu, int flavor, double ebinsize)
     flux238 = exp(b_238U)*exp(a_238U*nuen)*ebinsize;
     flux239 = exp(b_239Pu)*exp(a_239Pu*nuen)*ebinsize;
     flux241 = exp(b_241Pu)*exp(a_241Pu*nuen)*ebinsize;
-    
+
   } else {
     int numterms = 6;
     int p;
@@ -147,11 +69,11 @@ double Reactor::fluxval(double Enu, int flavor, double ebinsize)
     flux239 = exp(flux239)*ebinsize;
     flux241 = exp(flux241)*ebinsize;
 
-    
-  }
-  
 
-  
+  }
+
+
+
   double fluxtot = flux235*parentfrac[0]+flux238*parentfrac[1]+flux239*parentfrac[2]+flux241*parentfrac[3];
 
 
@@ -161,7 +83,7 @@ double Reactor::fluxval(double Enu, int flavor, double ebinsize)
 }
 
 
-double Reactor::maxEnu() 
+double Reactor::maxEnu()
 {
 
   // Return the maximum energy in MeV
@@ -189,9 +111,9 @@ double* Reactor::GetParentFrac() {
 
 
 
-double Monochromatic::fluxval(double Enu, int flavor, double ebinsize) 
+double Monochromatic::fluxval(double Enu, int flavor, double ebinsize)
 {
- 
+
   double flux;
   if (flavor == monoflavor) {
     flux = 1.;
@@ -210,7 +132,7 @@ double Monochromatic::fluxval(double Enu, int flavor, double ebinsize)
 }
 
 
-double Monochromatic::maxEnu() 
+double Monochromatic::maxEnu()
 {
 
   // Return the maximum energy in MeV
@@ -232,7 +154,7 @@ void Monochromatic::SetFlavor(int flavor) {
 }
 
 
-  
+
 void Monochromatic::SetEnergy(double energy) {
 
   monoenergy = energy;
@@ -258,7 +180,7 @@ void NumericalFlux::ReadFluxFile()
     std::cout << "File "<<fluxfilename<<" does not exist!" <<std::endl;
     exit(-1);
   } else {
-    while(! fluxfile.eof() ) 
+    while(! fluxfile.eof() )
       {
         fluxfile >> enu >> nue>>numu>>nutau>>nuebar>>numubar>>nutaubar;
         if (! fluxfile.eof()) {
@@ -277,7 +199,7 @@ void NumericalFlux::ReadFluxFile()
 }
 
 
-double NumericalFlux::fluxval(double enu,int flavor, double ebinsize) 
+double NumericalFlux::fluxval(double enu,int flavor, double ebinsize)
 {
   double flux = 1;
 
@@ -291,7 +213,7 @@ double NumericalFlux::fluxval(double enu,int flavor, double ebinsize)
   // Q is scaled by Rfac (see email from Chuck, Oct 17, 2017)
 
   std::map<double, double> _fluxmap;
-  
+
   switch (flavor) {
   case 1: _fluxmap = _nuefluxmap;
     break;
@@ -320,7 +242,7 @@ double NumericalFlux::fluxval(double enu,int flavor, double ebinsize)
       return i->second;
     }
   i_t l=i; --l;
-  
+
   const double delta=(enu- l->first)/(i->first - l->first);
   flux= delta*i->second +(1-delta)*l->second;
 
@@ -338,7 +260,7 @@ const char * NumericalFlux::GetFluxFilename() {
   return filename;
 }
 
-double NumericalFlux::maxEnu() 
+double NumericalFlux::maxEnu()
 {
 
   // Return the maximum energy in MeV.  Map is such that
@@ -355,9 +277,9 @@ double NumericalFlux::maxEnu()
 
 ////
 
-double PinchedThermal::fluxval(double Enu, int flavor, double ebinsize) 
+double PinchedThermal::fluxval(double Enu, int flavor, double ebinsize)
 {
- 
+
   //  flavor index goes nue, numu, nutau, nuebar, numubar, nutaubar
   // -3, -2, -1, 1, 2, 3
   // Energy should be in MeV
@@ -365,7 +287,7 @@ double PinchedThermal::fluxval(double Enu, int flavor, double ebinsize)
   int j;
 
   switch (flavor) {
-  case 1: j=0; 
+  case 1: j=0;
     break;
   case 2: j=1;
     break;
@@ -389,7 +311,7 @@ double PinchedThermal::fluxval(double Enu, int flavor, double ebinsize)
     const double dist=3.08568025e22; // [dist]=cm, 10 kpc
 
     double N=pow((alpha[j]+1.),(alpha[j]+1.))/(avgen[j]*tgamma(alpha[j]+1.));
-    double phi=N*pow((Enu/avgen[j]),alpha[j])*exp((-1.)*(alpha[j]+1.)*Enu/avgen[j]); 
+    double phi=N*pow((Enu/avgen[j]),alpha[j])*exp((-1.)*(alpha[j]+1.)*Enu/avgen[j]);
 
     fluxtot = 1./(4*M_PI*dist*dist)*luminosity[j]/avgen[j]*phi*ebinsize;
 
@@ -399,7 +321,7 @@ double PinchedThermal::fluxval(double Enu, int flavor, double ebinsize)
 }
 
 
-double PinchedThermal::maxEnu() 
+double PinchedThermal::maxEnu()
 {
 
   // Return the maximum energy in MeV

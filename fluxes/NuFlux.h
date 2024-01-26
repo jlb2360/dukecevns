@@ -2,6 +2,8 @@
 #define _NuFlux_
 
 #include <map>
+#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <vector>
 #include <fstream>
 #include <math.h>
@@ -22,14 +24,14 @@ class NuFlux
   double sin22thtaus;
   double dm2; // eV^2
   double baseline; // in meters
-    
- public: 
+
+ public:
   NuFlux();
   NuFlux(const char *);
   ~NuFlux(){};
 
   // Arguments: energy in MeV, flavor, ebinsize in MeV.
-  // Output is differential flux per ebinsize 
+  // Output is differential flux per ebinsize
   virtual double fluxval(double, int, double) = 0;
   // Should make a flavor specific one too
   virtual double maxEnu() = 0;
@@ -51,7 +53,21 @@ class PiDAR: public NuFlux {
  protected:
 
  public:
-  // PiDAR(){}
+  double wnumu;
+  double wnumubar;
+  double wnue;
+  int convolved;
+  int perpot;
+  double usernorm;
+  double tw1;
+  double tw2;
+  double teffic_params[3];
+  double protonspersec;
+  double nuspersecperflavor;
+  double exposure;
+
+
+  PiDAR(nlohmann::json j);
   PiDAR() : NuFlux("pidar") {}
   double fluxval(double,int, double);
   double maxEnu();
@@ -97,8 +113,8 @@ class Monochromatic: public NuFlux {
  double GetEnergy();
 
 };
-  
-  
+
+
 
 class NumericalFlux: public NuFlux {
 

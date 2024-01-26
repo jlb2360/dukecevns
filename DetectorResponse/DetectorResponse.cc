@@ -8,6 +8,57 @@
 
 // Numerical QF file related methods
 // Energies in MeV
+//
+//
+
+DetectorResponse::DetectorResponse(nlohmann::json j){
+    #include "mixtures.h"
+    #include "isomaps.h"
+
+  detector_mass = j["mass"]; // tons
+
+  eff_type = j["detectorresponse"]["efftype"];
+  SetEfficType(eff_type.c_str());
+
+  effname = j["detectorresponse"]["efficiencyfile"];
+
+  std::cout << "efficiency filename: "<<effname<<std::endl;
+  if (effname != "none") {
+
+    std::string eff_filename;
+    eff_filename = "eff/"+std::string(effname);
+    SetEfficFilename(eff_filename.c_str());
+    ReadEfficFile();
+  }
+  if (eff_type == "erecoil") {
+    recoilthresh = j["detectorresponse"]["stepthresh"];
+    SetStepThresh(recoilthresh); // Not actually needed
+    recoilupperthresh = j["detectorresponse"]["upperthresh"];
+    SetUpperThresh(recoilupperthresh);
+  } else if (eff_type == "eee") {
+    eethresh = j["detectorresponse"]["stepthresh"];
+    SetStepThresh(eethresh);
+    eeupperthresh = j["detectorresponse"]["upperthresh"];
+    SetUpperThresh(eeupperthresh);
+  } else if (eff_type == "qc") {
+    qcthresh = j["detectorresponse"]["stepthresh"];
+    SetStepThresh(qcthresh);
+    qcupperthresh = j["detectorresponse"]["upperthresh"];
+    SetUpperThresh(qcupperthresh);
+  }
+
+  qftype = j["detectorresponse"]["qftype"];
+  qfname = j["detectorresponse"]["qfname"];
+
+  material = j["material"];
+
+ // These are defined in mixtures include
+  fraction = molar_fraction[material];
+  isotope_component= isotopes[material];
+
+  std::cout << "Material "<<material<<std::endl;
+
+}
 
 void DetectorResponse::ReadQFFile()
 {
@@ -21,7 +72,7 @@ void DetectorResponse::ReadQFFile()
     std::cout << "File "<<filename<<" does not exist!" <<std::endl;
     exit(-1);
   } else {
-    while(! qffile.eof() ) 
+    while(! qffile.eof() )
       {
         qffile >> erec >> qf;
 
@@ -37,7 +88,7 @@ void DetectorResponse::ReadQFFile()
 
 ////
 
-double DetectorResponse::qfnum(double erec) 
+double DetectorResponse::qfnum(double erec)
 {
   double qf = 1;
 
@@ -48,7 +99,7 @@ double DetectorResponse::qfnum(double erec)
   typedef std::map<double, double>::const_iterator i_t;
 
   //  std::map<double, double> _qfmap;
-  
+
   i_t i=_qfmap.upper_bound(erec);
 
   if(i==_qfmap.end())
@@ -60,7 +111,7 @@ double DetectorResponse::qfnum(double erec)
       return i->second;
     }
   i_t l=i; --l;
-  
+
   const double delta=(erec- l->first)/(i->first - l->first);
   qf= delta*i->second +(1-delta)*l->second;
 
@@ -106,16 +157,16 @@ double DetectorResponse::qfnumderiv(double erec)
       qf1 = i->second;
       qf2 = nl->second;
 
-      
+
   } else {
     l=i; --l;
     er1 = l->first;
     er2 = i->first;
-    
+
     qf1 = l->second;
     qf2 = i->second;
 
-    
+
   }
 
   //double qferec = qf1+(qf2-qf1)/(er2-er1)*(erec-er1);
@@ -143,10 +194,10 @@ const char * DetectorResponse::GetQFFilename() {
   return qffilename;
 }
 
-double DetectorResponse::maxErec() 
+double DetectorResponse::maxErec()
 {
 
-  // Return the maximum energy in MeV.   For the numerical file 
+  // Return the maximum energy in MeV.   For the numerical file
 
   typedef std::map<double, double>::const_reverse_iterator i_t;
   i_t it = _qfmap.rbegin();
@@ -156,7 +207,7 @@ double DetectorResponse::maxErec()
 
 }
 
-/////// 
+///////
 
 // Polynomial QF-related methods
 
@@ -172,7 +223,7 @@ void DetectorResponse::ReadQFPolyFile() {
   } else {
     qfpolyfile >> qfpolyrange[0]>>qfpolyrange[1];
 
-    while(! qfpolyfile.eof() ) 
+    while(! qfpolyfile.eof() )
       {
 	qfpolyfile>>coeff;
         if (! qfpolyfile.eof()) {
@@ -202,7 +253,7 @@ double DetectorResponse::qfpoly(double erec) {
   }
 
   return qf;
-} 
+}
 
 double DetectorResponse::qfpolyderiv(double erec) {
 
@@ -212,7 +263,7 @@ double DetectorResponse::qfpolyderiv(double erec) {
   // erec in MeV
   double qfderiv = 0;
   for (size_t i=0; i<qfpolycoeff.size();i++) {
-      
+
     if (erec>=qfpolyrange[0]  && erec<=qfpolyrange[1] ) {
 
       qfderiv += (i+1)*qfpolycoeff[i]*pow(erec,i);
@@ -226,7 +277,7 @@ double DetectorResponse::qfpolyderiv(double erec) {
   }
 
   return qfderiv;
-} 
+}
 
 
 void DetectorResponse::SetQFPolyFilename(const char * fname) {
@@ -279,7 +330,7 @@ void DetectorResponse::ReadGSPolyFile() {
     std::cout << "gstype "<<gstype << std::endl;
     gspolyfile >> gspolyrange[0]>>gspolyrange[1];
 
-    while(! gspolyfile.eof() ) 
+    while(! gspolyfile.eof() )
       {
 	gspolyfile>>coeff;
         if (! gspolyfile.eof()) {
@@ -312,9 +363,9 @@ double DetectorResponse::gspoly(double en) {
 
 
   }
-    
+
   return gs;
-} 
+}
 
 
 double DetectorResponse::gspolysqrt(double en) {
@@ -328,16 +379,16 @@ double DetectorResponse::gspolysqrt(double en) {
   if (en<gspolyrange[0]) {
     // Use endpoint values if out of range
     entoeval = gspolyrange[0];
-    
+
   } else if (en>gspolyrange[1]) {
     entoeval = gspolyrange[0];
   }
-    
+
 
   gs=  gspolycoeff[0]*sqrt(entoeval)+gspolycoeff[1]*entoeval;
-   
+
   return gs;
-} 
+}
 
 
 
@@ -436,7 +487,7 @@ void DetectorResponse::SetGaussSmearingMatrix() {
     enstep  = maxSmearEn/NSmearBin;
   }
   std::cout << "Setting smearing of gstype: "<<gstype<<" "<<NSmearBin<<" "<<maxSmearEn<<std::endl;
-     
+
   for (ien=0;ien<NSmearBin;ien++) {
     eni += enstep;
 
@@ -461,18 +512,18 @@ void DetectorResponse::SetGaussSmearingMatrix() {
 
       SmearingMatrix[ien][jen] = exp(-pow(eni-enj,2)/(2*pow(sigma,2)))/(sqrt(2*M_PI)*sigma);
 
-      
+
     }
 
     if (isnan(SmearingMatrix[ien][jen]) ) {SmearingMatrix[ien][jen] = 0.;}
-	    
+
   } // End of loop over rows
 
 
   // Now normalize over rows in a given column
 
   for (jen=0;jen<NSmearBin;jen++) {
-    
+
     double totincolumn = 0.;
     for (ien=0;ien<NSmearBin;ien++) {
       totincolumn += SmearingMatrix[ien][jen];
@@ -505,10 +556,10 @@ void DetectorResponse::SetPoissonSmearingMatrix() {
   double pej=0.;
   int ipe, jpe;
 
-  double pestep = maxSmearEn/NSmearBin; // to synch with Smear method 
-     
+  double pestep = maxSmearEn/NSmearBin; // to synch with Smear method
+
   for (ipe=0;ipe<NSmearBin;ipe++) {
-    
+
     pej = 0.;
     for (jpe=0;jpe<NSmearBin;jpe++) {
 
@@ -536,14 +587,14 @@ void DetectorResponse::SetPoissonSmearingMatrix() {
     if (isnan(SmearingMatrix[ipe][jpe]) ) {SmearingMatrix[ipe][jpe] = 0.;}
 
     pei += pestep;
-	    
+
   } // End of loop over rows
 
 
   // Now normalize over rows in a given column
 
   for (jpe=0;jpe<NSmearBin;jpe++) {
-    
+
     double totincolumn = 0.;
     for (ipe=0;ipe<NSmearBin;ipe++) {
       totincolumn += SmearingMatrix[ipe][jpe];
@@ -574,10 +625,10 @@ void DetectorResponse::SetGammaSmearingMatrix() {
   double pej=0.;
   int ipe, jpe;
 
-  double pestep = maxSmearEn/NSmearBin; // to synch with Smear method 
+  double pestep = maxSmearEn/NSmearBin; // to synch with Smear method
 
   for (ipe=0;ipe<NSmearBin;ipe++) {
-    
+
     pej = 0.;
 
     for (jpe=0;jpe<NSmearBin;jpe++) {
@@ -607,14 +658,14 @@ void DetectorResponse::SetGammaSmearingMatrix() {
     if (isnan(SmearingMatrix[ipe][jpe]) ) {SmearingMatrix[ipe][jpe] = 0.;}
 
     pei += pestep;
-	    
+
   } // End of loop over rows
 
 
   // Now normalize over rows in a given column
 
   for (jpe=0;jpe<NSmearBin;jpe++) {
-    
+
     double totincolumn = 0.;
     for (ipe=0;ipe<NSmearBin;ipe++) {
       totincolumn += SmearingMatrix[ipe][jpe];
@@ -637,14 +688,14 @@ void DetectorResponse::SetGammaSmearingMatrix() {
 std::map<double, double> DetectorResponse::Smear(std::map<double,double> _unsmeared) {
 
   std::map<double,double> _smeared = _unsmeared;
- 
+
   // For norm check
   double totsmeared = 0;
   double totunsmeared = 0;
 
 	// Do the smearing
 
-  
+
   double enstep;
   if (qcbinning>0) {
     enstep = qcbinning;
@@ -665,24 +716,24 @@ std::map<double, double> DetectorResponse::Smear(std::map<double,double> _unsmea
     //    std::cout << "col "<<jen<<" "<<totincol<<std::endl;
   // }
 
-  
+
 
   for (ien=0;ien<NSmearBin;ien++) {
-    
+
     _smeared[eni] = 0.;
     double enj = 0;
 
     for (jen=0;jen<NSmearBin;jen++) {
-	  
+
       _smeared[eni]  +=   _unsmeared[enj]*SmearingMatrix[ien][jen];
 
-      //      if (SmearingMatrix[ien][jen]>0) { 
+      //      if (SmearingMatrix[ien][jen]>0) {
       //std::cout << maxSmearEn<<" "<<NSmearBin<<" "<<enstep<<" "<<ien<<" "<<jen<<" "<< eni<<" "<<enj<<" "<<_unsmeared[enj]<<" "<<SmearingMatrix[ien][jen]<<" "<<_smeared[eni]<<std::endl;
       //}
       enj += enstep;
 
     } // End of loop over columns for this row
-	  
+
     totunsmeared += _unsmeared[eni];
     totsmeared += _smeared[eni];
     eni += enstep;
@@ -729,7 +780,7 @@ void DetectorResponse::ReadEfficFile()
     std::cout << "File "<<filename<<" does not exist!" <<std::endl;
     exit(-1);
   } else {
-    while(! efficfile.eof() ) 
+    while(! efficfile.eof() )
       {
         efficfile >> erec >> effic;
 
@@ -745,7 +796,7 @@ void DetectorResponse::ReadEfficFile()
 
 ////
 
-double DetectorResponse::efficnum(double en) 
+double DetectorResponse::efficnum(double en)
 {
   double effic = 1;
 
@@ -756,7 +807,7 @@ double DetectorResponse::efficnum(double en)
   typedef std::map<double, double>::const_iterator i_t;
 
   //  std::map<double, double> _efficmap;
-  
+
   i_t i=_efficmap.upper_bound(en);
 
   if(i==_efficmap.end())
@@ -768,7 +819,7 @@ double DetectorResponse::efficnum(double en)
       return i->second;
     }
   i_t l=i; --l;
-  
+
   const double delta=(en- l->first)/(i->first - l->first);
   effic= delta*i->second +(1-delta)*l->second;
 
@@ -796,10 +847,10 @@ const char * DetectorResponse::GetEfficFilename() {
   return efficfilename;
 }
 
-double DetectorResponse::maxEfficErec() 
+double DetectorResponse::maxEfficErec()
 {
 
-  // Return the maximum energy in MeV.   For the numerical file 
+  // Return the maximum energy in MeV.   For the numerical file
 
   typedef std::map<double, double>::const_reverse_iterator i_t;
   i_t it = _efficmap.rbegin();
@@ -813,7 +864,7 @@ double DetectorResponse::maxEfficErec()
 void DetectorResponse::SetStepThresh(double thresh) {
 
   step_thresh = thresh;
- 
+
 }
 
 double DetectorResponse::GetStepThresh() { return step_thresh;}
@@ -821,10 +872,10 @@ double DetectorResponse::GetStepThresh() { return step_thresh;}
 void DetectorResponse::SetUpperThresh(double thresh) {
 
   upper_thresh = thresh;
- 
+
 }
 
 double DetectorResponse::GetUpperThresh() { return upper_thresh;}
 
 
-/////// 
+///////

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <math.h>
 #include <string>
+#include <nlohmann/json.hpp>
 
 // Energies in MeV
 class DetectorResponse
@@ -34,7 +35,7 @@ class DetectorResponse
 
   // For gamma function smearing
   double gammasmearpars[2];
-  
+
   int NEeeBin;
   double maxEee;
   double maxSmearEn;
@@ -60,8 +61,31 @@ class DetectorResponse
   char efficfilename[80];
 
 
- public: 
+ public:
+  double recoilthresh; //MeVr
+  double eethresh; //MeVr
+  double qcthresh; //Collected charge
+
+  double recoilupperthresh; //MeVr
+  double eeupperthresh; //MeVr
+  double qcupperthresh; //Collected charge
+
+  std::vector<double> fraction;
+  std::vector<std::string> isotope_component;
+
+  std::string qftype;
+  std::string qfname;
+
+  std::string material;
+
+  std::string eff_type;
+  std::string effname;
+
+  double detector_mass;
+
+
   DetectorResponse();
+  DetectorResponse(nlohmann::json j);
   DetectorResponse(const char *);
   ~DetectorResponse(){};
 
@@ -103,8 +127,8 @@ class DetectorResponse
 
   void SetGammaSmearPars(double*);
   double* GetGammaSmearPars();
-   
-  
+
+
   void SetNEeeBin(int);
   int GetNEeeBin();
 

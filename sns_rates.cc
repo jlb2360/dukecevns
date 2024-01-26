@@ -4,26 +4,28 @@
 
 using json = nlohmann::json;
 
-#include "DetectorResponse.h"
-#include "FormFactor.h"
-#include "NuFlux.h"
+#include "DetectorResponse/DetectorResponse.h"
+#include "FormFactors/FormFactor.h"
+#include "fluxes/NuFlux.h"
 
 
 #include <algorithm>
 #include <cstdlib>
-#include <ctime>
 #include <string>
-#include <sstream>
 #include <math.h>
 #include <map>
 
 #include "xscns.h"
+
 
 void get_flavor_weight(int, double,double,double*,double*, double*, double*);
 
 
 int main(int argc, char * argv[] )
 {
+    //These need to be in main so that it will compile with types.
+    #include "DetectorResponse/isomaps.h"
+    #include "DetectorResponse/mixtures.h"
 
   if (argc<2) {
     std::cout << "Usage:  ./sns_rates [jsonfile]"<<std::endl;
@@ -31,9 +33,9 @@ int main(int argc, char * argv[] )
   }
 
   const char * jsonfile = argv[1];
-  
+
   std::string jsonfilename = "jsonfiles/"+std::string(jsonfile)+".json";
-  
+
 
 // Read a JSON file with the parameters
     std::ifstream i(jsonfilename);
@@ -45,88 +47,21 @@ int main(int argc, char * argv[] )
 
     std::cout << j["flux"]["nusperprotonperflavor"]<<std::endl;
 
-    // Made these before adding json functionality
-#include "isomaps.h"
-  // Info for relevant mixtures
-#include "mixtures.h"
-	
-  double wnumu=1.;
-  double wnumubar=1.;
-  double wnue=1.;
 
-  int convolved=0;
-
-  // Can't seem to do this with a nested key easily; make convolved not nested
-  if (j.find("convolved") != j.end()) {
-      convolved = j["convolved"];
-  }
-  std::cout << "Convolved "<<convolved<<std::endl;
-
-  int perpot = 0;
-  
- if (j.find("perpot") != j.end()) {
-      perpot = j["perpot"];
-  }
-
- // A generic normalization factor for the recoil spectrum
-  double usernorm = 1.;
-
-  if (j.find("usernorm") != j.end()) {
-    usernorm = j["usernorm"];
-    std::cout << "User normalization: "<<usernorm<<std::endl;
-  }
-
- 
-  // Don't use flavor weights if using snsflux numerical flux; it that should take care of the weighting
-  //get_flavor_weight(1400.,7400.,&wnumu,&wnumubar,&wnue);
-
-  double tw1 = j["timewindow"]["start"];
-  double tw2 = j["timewindow"]["end"];
-  
-  
-  if (convolved>0) {
-    double teffic_params[3]={0,0,0};
-
-    if (j.find("teffic") != j.end()) {
-      teffic_params[0] = j["teffic"]["offset"];
-      teffic_params[1] = j["teffic"]["a"];
-      teffic_params[2] = j["teffic"]["b"];
-    }
-
-    get_flavor_weight(convolved,tw1,tw2,teffic_params,&wnumu,&wnumubar,&wnue);
-  }
-
-  // Flavor weighting from file if chosen. Do individually so as not to override convolved 
-
-  if (j.find("wnumu") != j.end()) {
-      wnumu = j["wnumu"];
-  }
-  if (j.find("wnumubar") != j.end()) {
-      wnumubar = j["wnumubar"];
-  }
-  if (j.find("wnue") != j.end()) {  
-      wnue = j["wnue"];
-  }
-
-  
-  std::cout << "Flavor weights: "<< wnumu<<" "<<wnumubar<<" "<<wnue<<std::endl;
-
-  // Zenodo for first microsecond
-  // wnue=0.120603;
-  // wnumubar = 0.120603;
-  // wnumu =  0.974297;
-   
   // Set up the form factor
 
   std::string ffname = j["formfactor"]["type"];
 
   int noff = 0.;
   if (ffname == "unity") {
-    noff = 1.; 
+    noff = 1.;
   }
+
+
   // Array of pointers to form factors, for protons and neutrons separately, axial and vector separately
   // (although small differences)
 
+  // max components is 15, found in mixtures.h
   FormFactor** ffpv;
   ffpv = new FormFactor*[max_components];
   FormFactor** ffpa;
@@ -137,106 +72,21 @@ int main(int argc, char * argv[] )
   FormFactor** ffna;
   ffna = new FormFactor*[max_components];
 
-  // Set up the flux
 
-  //PiDAR* pidarflux = new PiDAR();
-  //NumericalFlux* snsflux = new NumericalFlux();
-  //snsflux->SetFluxFilename("time_integral.dat");
-  //snsflux->ReadFluxFile();
+  // Set up the neutrino flux
+    PiDAR* snsflux = new PiDAR(j);
 
-    PiDAR* snsflux = new PiDAR();
-  
+  // Set up the detector response-- this is an overall detector response
+  DetectorResponse* detresp = new DetectorResponse(j);
+
   double kmax = snsflux->maxEnu();
   std::cout << "kmax "<<kmax << std::endl;
-  // Normalize flux for 19.3 m from SNS, per cm^2 per s
-  //snsflux->SetNorm(5.e14/(4*M_PI*1950.*1950.));
 
-  double mevperproton = j["flux"]["mevperproton"];
-  double jperproton= mevperproton*1.e6*1.6021e-19;
-  double beampower = j["flux"]["power"];
-  beampower*=1.e6; // in Joules/s
-  double protonspersec = beampower/jperproton;
-  double nusperprotonperflavor = j["flux"]["nusperprotonperflavor"];
-  double nuspersecperflavor = nusperprotonperflavor*protonspersec;
-  double dist = j["distance"];
-  std::cout << "Nus per sec per flavor "<<nuspersecperflavor<<" "<<dist<<" flux "<<nuspersecperflavor/(4*M_PI*dist*dist)<<std::endl;
-  snsflux->SetNorm(nuspersecperflavor/(4*M_PI*dist*dist));
-  // Gives flux per pidk per energy bin per second, energy bin in MeV,  normalize for 5e14 decays/s 
-
-
-  
-  // Set up oscillations
-
-
-  if (j.find("doosc") != j.end()) {
-    int doosc = j["doosc"];
-    if (doosc == 1) {
-      double ua4[3];
-      ua4[0] = j["osc"]["ue4"];
-      ua4[1] = j["osc"]["umu4"];
-      ua4[2] = j["osc"]["utau4"];
-      double dm2 = j["osc"]["dm2"];
-      snsflux->SetOscParam(ua4,dm2,dist);
-    }
-  }
-
-
-  
-  // Set up the detector response-- this is an overall detector response
-
-  
-  DetectorResponse* detresp = new DetectorResponse();
-
-  double recoilthresh = 0.; //MeVr
-  double eethresh = 0.; //MeVr
-  double qcthresh = 0.; //Collected charge
-
-  double recoilupperthresh = 0.; //MeVr
-  double eeupperthresh = 0.; //MeVr
-  double qcupperthresh = 0.; //Collected charge
-
-  std::string eff_type = j["detectorresponse"]["efftype"];
-  detresp->SetEfficType(eff_type.c_str());
-  
-  std::string effname = j["detectorresponse"]["efficiencyfile"];
-
-  std::cout << "efficiency filename: "<<effname<<std::endl;
-  if (effname != "none") {
-
-    std::string eff_filename;
-    eff_filename = "eff/"+std::string(effname);
-    detresp->SetEfficFilename(eff_filename.c_str());
-    detresp->ReadEfficFile();
-  }
-  if (eff_type == "erecoil") {
-    recoilthresh = j["detectorresponse"]["stepthresh"];
-    detresp->SetStepThresh(recoilthresh); // Not actually needed
-    recoilupperthresh = j["detectorresponse"]["upperthresh"];
-    detresp->SetUpperThresh(recoilupperthresh);
-  } else if (eff_type == "eee") {
-    eethresh = j["detectorresponse"]["stepthresh"];
-    detresp->SetStepThresh(eethresh);
-    eeupperthresh = j["detectorresponse"]["upperthresh"];
-    detresp->SetUpperThresh(eeupperthresh);
-  } else if (eff_type == "qc") {
-    qcthresh = j["detectorresponse"]["stepthresh"];
-    detresp->SetStepThresh(qcthresh);
-    qcupperthresh = j["detectorresponse"]["upperthresh"];
-    detresp->SetUpperThresh(qcupperthresh);
-  }
-
-
-    // Set up the material
-
-    //    std::string material = "Ar40";
-
-  std::string material = j["material"];
-    
 
   std::ofstream outfile;
   std::string outfilename;
   //  outfilename = "sns_diff_rates-"+material+"-"+std::string(ffname)+".out";
-  outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+material+"-"+ffname+".out";
+  outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+".out";
   outfile.open(outfilename);
   std::cout << outfilename <<std::endl;
 
@@ -245,36 +95,23 @@ int main(int argc, char * argv[] )
   int Nn,Z,A;
   int Zdiff, Ndiff;
 
-  std::string matname = material;
 
- // These are defined in mixtures include
-  std::vector<double> fraction = molar_fraction[material];
-  std::vector<std::string> isotope_component= isotopes[material];
-
-  std::cout << "Material "<<matname<<std::endl;
-
-  // Quenching filename info
-
-  std::string qftype = j["detectorresponse"]["qftype"];
-  std::string qfname = j["detectorresponse"]["qfname"];
 
   double Ntargets = 0; // Total targets
   int is=0;
-  std::vector<std::string>::iterator v = isotope_component.begin();
+  std::vector<std::string>::iterator v = detresp -> isotope_component.begin();
   std::string isotope;
 
   // First get the total mass.  Get also the maximum recoil values
 
-  //double erecmaxvals[max_components];
   double Mtot = 0;
-  v = isotope_component.begin();
 
   DetectorResponse** qffunc;
   qffunc = new DetectorResponse*[max_components];
 
   // First loop over materials, to set up material-specific arrays
   double minM = 1.e10;
-  while( v != isotope_component.end()) {
+  while( v != detresp->isotope_component.end()) {
 
     isotope = *v;
     std::cout << "isotope"<< isotope << std::endl;
@@ -285,7 +122,7 @@ int main(int argc, char * argv[] )
     Delta = Deltas[std::string(isotope)];
     M = (Z+Nn)*amu - Z*me + Delta;
     if (M<minM) {minM=M;}
-    Mtot += M*fraction[is];
+    Mtot += M*detresp->fraction[is];
     //erecmaxvals[is] = 2*kmax*kmax/(M+2*kmax);
 
 
@@ -301,7 +138,7 @@ int main(int argc, char * argv[] )
 
 
     if (ffname == "helm") {
-          
+
       double nvsfact = j["formfactor"]["nvsfact"];
       double nasfact = j["formfactor"]["nasfact"];
       double pvsfact = j["formfactor"]["pvsfact"];
@@ -367,7 +204,7 @@ int main(int argc, char * argv[] )
       kleinffpv->Setskinfac(paskin);
 
 
-    } 
+    }
     else if  (ffname =="horowitz"){
       Horowitz* horowitzffnv = new Horowitz();
       ffnv[is] = horowitzffnv;
@@ -413,31 +250,31 @@ int main(int argc, char * argv[] )
       ffna[is]->SetA(A);
       ffpv[is]->SetA(A);
       ffpa[is]->SetA(A);
-      
+
       ffnv[is]->SetZ(Z);
       ffna[is]->SetZ(Z);
       ffpv[is]->SetZ(Z);
       ffpa[is]->SetZ(Z);
 
     }
-      
+
   // Set up detector quenching factors for each component
 
-    
-    if (qftype == "poly") {
+
+    if (detresp->qftype == "poly") {
       std::string qffilename;
-      qffilename = "qf/"+std::string(qfname)+"_"+isoname+"_qf.txt";
+      qffilename = "qf/"+std::string(detresp->qfname)+"_"+isoname+"_qf.txt";
       DetectorResponse* qf = new DetectorResponse();
-	
+
       std::cout << "Quenching factor: "<<qffilename<<std::endl;
       qffunc[is] = qf;
       qffunc[is]->SetQFPolyFilename(qffilename.c_str());
       qffunc[is]->ReadQFPolyFile();
-    } else if (qftype == "numerical") {
+    } else if (detresp->qftype == "numerical") {
       std::string qffilename;
-      qffilename = "qf/"+std::string(qfname)+"_"+isoname+"_qfnum.txt";
+      qffilename = "qf/"+std::string(detresp->qfname)+"_"+isoname+"_qfnum.txt";
       DetectorResponse* qf = new DetectorResponse();
-	
+
       std::cout << "Quenching factor: "<<qffilename<<std::endl;
       qffunc[is] = qf;
       qffunc[is]->SetQFFilename(qffilename.c_str());
@@ -448,32 +285,28 @@ int main(int argc, char * argv[] )
 
     // Overall norm factor
 
-  double detector_mass = j["mass"]; // tons
 
-  double hours =j["flux"]["hours"];
-  double exposure = 3600.*hours;
+  double norm_factor = detresp->detector_mass*snsflux->exposure*snsflux->usernorm;
 
-  double norm_factor = detector_mass*exposure*usernorm;
-
-  if (perpot == 1) {
-    double pot = protonspersec*exposure;
+  if (snsflux->perpot == 1) {
+    double pot = snsflux->protonspersec*snsflux->exposure;
     norm_factor/= pot;
     std::cout << "Protons on target: "<<pot<<" ; output per pot "<<std::endl;
   }
-  
 
-  // Set up arrays for quenched total rates... could make this a stl vec 
+
+  // Set up arrays for quenched total rates... could make this a stl vec
    // but this is probably more efficient
 
 
 
   // Use the mass of the lightest component
   double erecmaxall = 2*kmax*kmax/(minM+2*kmax);
-  
+
   //double recoilthresh = 0.013; //MeVr
-  double erecstart = recoilthresh;
-  double erecend = recoilupperthresh > recoilthresh ?
-                   std::min(erecmaxall, recoilupperthresh) :
+  double erecstart = detresp->recoilthresh;
+  double erecend = detresp->recoilupperthresh > detresp->recoilthresh ?
+                   std::min(erecmaxall, detresp->recoilupperthresh) :
                    erecmaxall;
 
   double erecstep = 0.0001;
@@ -497,7 +330,7 @@ int main(int argc, char * argv[] )
   }
 
   double* dNdErall = new double[maxiq];
-  
+
   // Now compute the differential recoil spectra
 
     double Erec;
@@ -526,7 +359,7 @@ int main(int argc, char * argv[] )
    for (Erec=erecstart+erecstep;Erec<=erecend; Erec+=erecstep) {
 
      Er[iq] = Erec;
-     
+
      // Contributions for each component
      double diffrate_e_vec[max_components]={0.};
      double diffrate_ebar_vec[max_components]={0.};
@@ -534,7 +367,7 @@ int main(int argc, char * argv[] )
      double diffrate_mubar_vec[max_components]={0.};
      double diffrate_tau_vec[max_components]={0.};
      double diffrate_taubar_vec[max_components]={0.};
-     
+
      double diffrate_e_axial[max_components]={0.};
      double diffrate_ebar_axial[max_components]={0.};
      double diffrate_mu_axial[max_components]={0.};
@@ -566,7 +399,7 @@ int main(int argc, char * argv[] )
      double sum_diffrate_mubar_vec=0;
      double sum_diffrate_tau_vec=0;
      double sum_diffrate_taubar_vec=0;
-     
+
      double sum_diffrate_e_axial=0;
      double sum_diffrate_ebar_axial=0;
      double sum_diffrate_mu_axial=0;
@@ -588,78 +421,73 @@ int main(int argc, char * argv[] )
      double sum_diffrate_tau_mag=0;
      double sum_diffrate_taubar_mag=0;
 
-     
-     
+
+
      // With efficiency, which is a function of Erec in MeV in this formuation
-     
+
      double recoil_eff_factor = 1;
-     if (effname != "none" && eff_type == "erecoil") {
+     if (detresp->effname != "none" && detresp->eff_type == "erecoil") {
        recoil_eff_factor = detresp->efficnum(Erec);
      }
-     
+
      //     double eff_factor = 1.;
      //     std::cout << "recoil eff factor "<<recoil_eff_factor<<std::endl;
      // Skip if too small contribution
      if (recoil_eff_factor>0) {
-	  
 
-       v = isotope_component.begin();
+
+       v = detresp->isotope_component.begin();
        // Now loop over components
        is=0;
-       while( v != isotope_component.end()) {
-	    
-	 isotope = *v;
-	 //	  std::cout << "isotope"<< isotope << std::endl;
-	    
-	 Z = Zs[std::string(isotope)];
-	 Nn = Ns[std::string(isotope)];
-	 Delta = Deltas[std::string(isotope)];
-	 M = (Z+Nn)*amu - Z*me + Delta;
-	    	    
-	 Zdiff = Zdiffs[std::string(isotope)];
-	 Ndiff = Ndiffs[std::string(isotope)];
-	    
-	 mass_fraction[is] = M/Mtot*fraction[is];
-	    
-	 A = Nn + Z;
-	 //	 std::cout << " Z "<<Z<<" N "<<Nn<<" A "<<A<<" M "<<M << " "<<mass_fraction[is]<<std::endl;
+       while( v != detresp->isotope_component.end()) {
 
-	 // Loop over neutrino energy contributions
-	  
-	 // Minimum neutrino energy contributing to a given recoil energy
+	        isotope = *v;
+	        //	  std::cout << "isotope"<< isotope << std::endl;
 
-	 double knumin = 0.5*(Erec+sqrt(Erec*Erec+2*M*Erec));
-	 double hbarc = 197.327; // MeV-fm, convert for Q in MeV for ff
-	 double Q = sqrt(2*M*Erec+Erec*Erec); // MeV
-	 //	 double Q = sqrt(2*M*Erec); // MeV
+	        Z = Zs[std::string(isotope)];
+	        Nn = Ns[std::string(isotope)];
+	        Delta = Deltas[std::string(isotope)];
+	        M = (Z+Nn)*amu - Z*me + Delta;
 
-	 double qq = Q/hbarc;
-	 //    double ff2 = helmff->FFval(qq);
-	 double ffnvval;
-	 double ffnaval;
-	 double ffpvval;
-	 double ffpaval;
-	 if (noff == 0) {
-	   ffnvval = ffnv[is]->FFval(qq);
-	   ffnaval = ffna[is]->FFval(qq);
-	   ffpvval = ffpv[is]->FFval(qq);
-	   ffpaval = ffpa[is]->FFval(qq);
-	 } else {
-	   ffnvval = 1.;
-	   ffnaval = 1.;
-	   ffpvval = 1.;
-	   ffpaval = 1.;
-	 }
-	   
-	 //	 double ff2 = pow(ff[is]->FFval(qq),2);
-	 //std::cout << "knumin, Erec, Q, ff2 "<<knumin<<" "<<Erec<<" "<<Q<<" "<<ff2<<" "<<M<<" "<<mass_fraction[is]<<std::endl;
-	    
+	        Zdiff = Zdiffs[std::string(isotope)];
+	        Ndiff = Ndiffs[std::string(isotope)];
+
+	        mass_fraction[is] = M/Mtot*detresp->fraction[is];
+
+	        A = Nn + Z;
+	        //	 std::cout << " Z "<<Z<<" N "<<Nn<<" A "<<A<<" M "<<M << " "<<mass_fraction[is]<<std::endl;
+
+	        // Loop over neutrino energy contributions
+
+	        // Minimum neutrino energy contributing to a given recoil energy
+
+	        double knumin = 0.5*(Erec+sqrt(Erec*Erec+2*M*Erec));
+	        double hbarc = 197.327; // MeV-fm, convert for Q in MeV for ff
+	        double Q = sqrt(2*M*Erec+Erec*Erec); // MeV
+	        //	 double Q = sqrt(2*M*Erec); // MeV
+
+	        double qq = Q/hbarc;
+	        //    double ff2 = helmff->FFval(qq);
+	        double ffnvval;
+	        double ffnaval;
+	        double ffpvval;
+	        double ffpaval;
+	        if (noff == 0) {
+	            ffnvval = ffnv[is]->FFval(qq);
+	            ffnaval = ffna[is]->FFval(qq);
+	            ffpvval = ffpv[is]->FFval(qq);
+	            ffpaval = ffpa[is]->FFval(qq);
+	        } else {
+	            ffnvval = 1.;
+	            ffnaval = 1.;
+	            ffpvval = 1.;
+	            ffpaval = 1.;
+	        }
+
+
 	 // SM Couplings
 
-	 //	 double GV_sm = GV_SM(2015,Z,Nn);
-	 //double GA_sm = GA_SM(2015,1,Z,Nn,Zdiff,Ndiff);
-	 //double GA_sm_bar = GA_SM(2015,-1,Z,Nn,Zdiff,Ndiff);
-	   
+
 	 double gv[2], ga[2], gabar[2];
 	 int pdgyr = j["couplings"]["pdgyear"];
 	 if (pdgyr==0) {
@@ -687,7 +515,7 @@ int main(int argc, char * argv[] )
 
 	 if (j["couplings"]["chargeradiusfactor"] == "sehgal") {
 	   mufact = mufactor(Q);
-	 }	   
+	 }
 
 	double GV_sm_wff_e=GV_sm_wff;
 	double GV_sm_wff_ebar=GV_sm_wff;
@@ -704,11 +532,11 @@ int main(int argc, char * argv[] )
 	double chgradcorr_taubar = 0.;
 
 	int chgcorrtype=0;
-	
+
 	if  (j["couplings"]["chargeradiusfactor"] == "erler") {
 	  chgcorrtype=1;
 	}
-	
+
 	if  (j["couplings"]["chargeradiusfactor"] == "giunti") {
 	  // Corrected
 	  chgcorrtype = 2;
@@ -737,15 +565,15 @@ int main(int argc, char * argv[] )
 	  chgradcorr_tau = chgradcorr_tomalak(Q,3);
 	  chgradcorr_taubar = chgradcorr_tomalak(Q,3);
 	}
-	
-	
+
+
 	GV_sm_wff_e= Z*(gv[0]+chgradcorr_e)*ffpvval+Nn*gv[1]*ffnvval;
 	GV_sm_wff_ebar= Z*(gv[0]+chgradcorr_ebar)*ffpvval+Nn*gv[1]*ffnvval;
 	GV_sm_wff_mu= Z*(gv[0]+chgradcorr_mu)*ffpvval+Nn*gv[1]*ffnvval;
 	GV_sm_wff_mubar= Z*(gv[0]+chgradcorr_mubar)*ffpvval+Nn*gv[1]*ffnvval;
 	GV_sm_wff_tau= Z*(gv[0]+chgradcorr_tau)*ffpvval+Nn*gv[1]*ffnvval;
 	GV_sm_wff_taubar= Z*(gv[0]+chgradcorr_taubar)*ffpvval+Nn*gv[1]*ffnvval;
-	
+
 	// Default is SM
 	double GV_wff_e = GV_sm_wff_e;
 	double GV_wff_ebar = GV_sm_wff_ebar;
@@ -838,10 +666,10 @@ int main(int argc, char * argv[] )
 	  GV_wff_mubar = gV_nsi_wff_mubar;
 	  GV_wff_tau = gV_nsi_wff_tau;
 	  GV_wff_taubar = gV_nsi_wff_taubar;
-	  
+
 	} // End of donsi case
-	
-	
+
+
 	// Magnetic moment..by flavor not quite right but OK for now
 
 	double munu_e=0.;
@@ -865,29 +693,29 @@ int main(int argc, char * argv[] )
 	  munu_mubar *= 1.e-10;
 	  munu_tau *= 1.e-10;
 	  munu_taubar *= 1.e-10;
-	  
+
 	}
 
 	 // Targets for one ton of material
 	 // Will be weighted by mass fraction
-	    
+
 	 double Nt = 1.e6/(M/amu)*6.0221409e23;
 
 
 	 //	 std::cout << "Number of targets "<<Nt<<std::endl;
-	 // A2: G^2/(2Pi) * hbarcinmeters^-4 
+	 // A2: G^2/(2Pi) * hbarcinmeters^-4
 	 double ntfac = Nt;
-	    
+
 	  // Quenching factor for this component and Eee for this Erec
 
 	 double qfderiv=1;
-	 if (qftype == "poly") {
+	 if (detresp->qftype == "poly") {
 	  Eee[is][iq] = qffunc[is]->qfpoly(Erec)*Erec;
 	  qfderiv = abs(qffunc[is]->qfpolyderiv(Erec));
-	 } else if (qftype == "numerical") {
+	 } else if (detresp->qftype == "numerical") {
 	  Eee[is][iq] = qffunc[is]->qfnum(Erec)*Erec;
 	  qfderiv = abs(qffunc[is]->qfnumderiv(Erec));
-	 } 
+	 }
 
 
 	 double drate_e_vec=0;
@@ -896,7 +724,7 @@ int main(int argc, char * argv[] )
 	 double drate_mubar_vec=0;
 	 double drate_tau_vec=0;
 	 double drate_taubar_vec=0;
-	    
+
 
 	 double drate_e_axial=0;
 	 double drate_ebar_axial=0;
@@ -904,7 +732,7 @@ int main(int argc, char * argv[] )
 	 double drate_mubar_axial=0;
 	 double drate_tau_axial=0;
 	 double drate_taubar_axial=0;
-	    
+
 
 	 double drate_e_interf=0;
 	 double drate_ebar_interf=0;
@@ -924,7 +752,7 @@ int main(int argc, char * argv[] )
 
 	 // Dumb integral, could be more clever to make it faster
 	 for (knu=knumin;knu<=kmax;knu+=knustep) {
-	  	  
+
 	   drate_e_vec += diffxscnvec(knu,M,Erec)*snsflux->fluxval(knu,1,knustep);
 	   drate_ebar_vec += diffxscnvec(knu,M,Erec)*snsflux->fluxval(knu,-1,knustep);
 	   drate_mu_vec += diffxscnvec(knu,M,Erec)*snsflux->fluxval(knu,2,knustep);
@@ -956,47 +784,47 @@ int main(int argc, char * argv[] )
 	   drate_taubar_mag += diffxscnmag(knu,Erec)*snsflux->fluxval(knu,-3,knustep);
 
 
-	      
+
 	   //    std::cout << Erec << " "<<knu<<" "<<snsflux->fluxval(knu,1,knustep)<<" "<<diffrate_e_vec<<std::endl;
 
 	 } // End of loop over neutrino energy contributions
-	   
+
 	 // Now multiply by target-dependent factors and add up this recoil energy bin
 
 
-	 diffrate_e_vec[is] += ntfac*pow(GV_wff_e,2)*mass_fraction[is]*drate_e_vec*wnue;
+	 diffrate_e_vec[is] += ntfac*pow(GV_wff_e,2)*mass_fraction[is]*drate_e_vec*snsflux->wnue;
 	 diffrate_ebar_vec[is] += ntfac*pow(GV_wff_ebar,2)*mass_fraction[is]*drate_ebar_vec;
-	 diffrate_mu_vec[is] += ntfac*pow(GV_wff_mu,2)*mass_fraction[is]*drate_mu_vec*mufact*wnumu;
-	 diffrate_mubar_vec[is] += ntfac*pow(GV_wff_mubar,2)*mass_fraction[is]*drate_mubar_vec*mufact*wnumubar;
+	 diffrate_mu_vec[is] += ntfac*pow(GV_wff_mu,2)*mass_fraction[is]*drate_mu_vec*mufact*snsflux->wnumu;
+	 diffrate_mubar_vec[is] += ntfac*pow(GV_wff_mubar,2)*mass_fraction[is]*drate_mubar_vec*mufact*snsflux->wnumubar;
 	 diffrate_tau_vec[is] +=  ntfac*pow(GV_wff_tau,2)*mass_fraction[is]*drate_tau_vec;
 	 diffrate_taubar_vec[is] += ntfac*pow(GV_wff_taubar,2)*mass_fraction[is]*drate_taubar_vec;
 
 
-	 diffrate_e_axial[is] += ntfac*pow(GA_wff,2)*mass_fraction[is]*drate_e_axial*wnue;
+	 diffrate_e_axial[is] += ntfac*pow(GA_wff,2)*mass_fraction[is]*drate_e_axial*snsflux->wnue;
 	 diffrate_ebar_axial[is] += ntfac*pow(GA_bar_wff,2)*mass_fraction[is]*drate_ebar_axial;
-	 diffrate_mu_axial[is] += ntfac*pow(GA_wff,2)*mass_fraction[is]*drate_mu_axial*mufact*wnumu;
-	 diffrate_mubar_axial[is] += ntfac*pow(GA_bar_wff,2)*mass_fraction[is]*drate_mubar_axial*mufact*wnumubar;
+	 diffrate_mu_axial[is] += ntfac*pow(GA_wff,2)*mass_fraction[is]*drate_mu_axial*mufact*snsflux->wnumu;
+	 diffrate_mubar_axial[is] += ntfac*pow(GA_bar_wff,2)*mass_fraction[is]*drate_mubar_axial*mufact*snsflux->wnumubar;
 	 diffrate_tau_axial[is] +=  ntfac*pow(GA_wff,2)*mass_fraction[is]*drate_tau_axial;
 	 diffrate_taubar_axial[is] +=  ntfac*pow(GA_bar_wff,2)*mass_fraction[is]*drate_taubar_axial;
 
 
-	 diffrate_e_interf[is] += ntfac*GV_wff_e*GA_wff*mass_fraction[is]*drate_e_interf*wnue;
+	 diffrate_e_interf[is] += ntfac*GV_wff_e*GA_wff*mass_fraction[is]*drate_e_interf*snsflux->wnue;
 	 diffrate_ebar_interf[is] += ntfac*GV_wff_ebar*GA_bar_wff*mass_fraction[is]*drate_ebar_interf;
-	 diffrate_mu_interf[is] += ntfac*GV_wff_mu*GA_wff*mass_fraction[is]*drate_mu_interf*mufact*wnumu;
-	 diffrate_mubar_interf[is] += ntfac*GV_wff_mubar*GA_bar_wff*mass_fraction[is]*drate_mubar_interf*mufact*wnumubar;
+	 diffrate_mu_interf[is] += ntfac*GV_wff_mu*GA_wff*mass_fraction[is]*drate_mu_interf*mufact*snsflux->wnumu;
+	 diffrate_mubar_interf[is] += ntfac*GV_wff_mubar*GA_bar_wff*mass_fraction[is]*drate_mubar_interf*mufact*snsflux->wnumubar;
 	 diffrate_tau_interf[is] +=  ntfac*GV_wff_tau*GA_wff*mass_fraction[is]*drate_tau_interf;
 	 diffrate_taubar_interf[is] +=  ntfac*GV_wff_taubar*GA_bar_wff*mass_fraction[is]*drate_taubar_interf;
 
-	 diffrate_e_mag[is] += ntfac*pow(munu_e,2)*pow(Z,2)*mass_fraction[is]*drate_e_mag*wnue;
+	 diffrate_e_mag[is] += ntfac*pow(munu_e,2)*pow(Z,2)*mass_fraction[is]*drate_e_mag*snsflux->wnue;
 	 diffrate_ebar_mag[is] += ntfac*pow(munu_ebar,2)*pow(Z,2)*mass_fraction[is]*drate_ebar_mag;
-	 diffrate_mu_mag[is] += ntfac*pow(munu_mu,2)*pow(Z,2)*mass_fraction[is]*drate_mu_mag*wnumu;
-	 diffrate_mubar_mag[is] += ntfac*pow(munu_mubar,2)*pow(Z,2)*mass_fraction[is]*drate_mubar_mag*wnumubar;
+	 diffrate_mu_mag[is] += ntfac*pow(munu_mu,2)*pow(Z,2)*mass_fraction[is]*drate_mu_mag*snsflux->wnumu;
+	 diffrate_mubar_mag[is] += ntfac*pow(munu_mubar,2)*pow(Z,2)*mass_fraction[is]*drate_mubar_mag*snsflux->wnumubar;
 	 diffrate_tau_mag[is] +=  ntfac*pow(munu_tau,2)*pow(Z,2)*mass_fraction[is]*drate_tau_mag;
 	 diffrate_taubar_mag[is] +=  ntfac*pow(munu_taubar,2)*pow(Z,2)*mass_fraction[is]*drate_taubar_mag;
 
 
 	  // Now add the contribution from this isotope to the sum
-	  
+
 
 	 sum_diffrate_e_vec += diffrate_e_vec[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_ebar_vec += diffrate_ebar_vec[is]*norm_factor*recoil_eff_factor;
@@ -1004,14 +832,14 @@ int main(int argc, char * argv[] )
 	 sum_diffrate_mubar_vec += diffrate_mubar_vec[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_tau_vec += diffrate_tau_vec[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_taubar_vec += diffrate_taubar_vec[is]*norm_factor*recoil_eff_factor;
-	 
+
 	 sum_diffrate_e_axial += diffrate_e_axial[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_ebar_axial += diffrate_ebar_axial[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_mu_axial += diffrate_mu_axial[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_mubar_axial += diffrate_mubar_axial[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_tau_axial += diffrate_tau_axial[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_taubar_axial += diffrate_taubar_axial[is]*norm_factor*recoil_eff_factor;
-	  
+
 	 sum_diffrate_e_interf += diffrate_e_interf[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_ebar_interf += diffrate_ebar_interf[is]*norm_factor*recoil_eff_factor;
 	 sum_diffrate_mu_interf += diffrate_mu_interf[is]*norm_factor*recoil_eff_factor;
@@ -1048,7 +876,7 @@ int main(int argc, char * argv[] )
 
 	  dNdEr[is][iq] = sum_events_iso;
 	  dNdErall[iq] += sum_events_iso;
-	    
+
 	  if (qfderiv>0) {
 	    dNdEee[is][iq] = sum_events_iso/qfderiv;
 	  } else {
@@ -1079,14 +907,14 @@ int main(int argc, char * argv[] )
 //      sum_diffrate_mubar_vec *= norm_factor*wnumubar;
 //      sum_diffrate_tau_vec *= norm_factor;
 //      sum_diffrate_taubar_vec *= norm_factor;
-     
+
 //      sum_diffrate_e_axial *= norm_factor*wnue;
 //      sum_diffrate_ebar_axial *= norm_factor;
 //      sum_diffrate_mu_axial *= norm_factor*wnumu;
 //      sum_diffrate_mubar_axial *= norm_factor*wnumubar;
 //      sum_diffrate_tau_axial *= norm_factor;
 //      sum_diffrate_taubar_axial *= norm_factor;
-	
+
 //      sum_diffrate_e_interf *= norm_factor*wnue;
 //      sum_diffrate_ebar_interf *= norm_factor;
 //      sum_diffrate_mu_interf *= norm_factor*wnumu;
@@ -1099,7 +927,7 @@ int main(int argc, char * argv[] )
      outfile << Erec<<scientific<<" "<<sum_diffrate_e_vec<<" "<<sum_diffrate_ebar_vec<<" "<<sum_diffrate_mu_vec<<" "<<sum_diffrate_mubar_vec<<" "<<sum_diffrate_tau_vec<<" "<<sum_diffrate_taubar_vec<<" "<<sum_diffrate_e_axial<<" "<<sum_diffrate_ebar_axial<<" "<<sum_diffrate_mu_axial<<" "<<sum_diffrate_mubar_axial<<" "<<sum_diffrate_tau_axial<<" "<<sum_diffrate_taubar_axial<<" "<<sum_diffrate_e_interf<<" "<<sum_diffrate_ebar_interf<<" "<<sum_diffrate_mu_interf<<" "<<sum_diffrate_mubar_interf<<" "<<sum_diffrate_tau_interf<<" "<<sum_diffrate_taubar_interf <<" "<<sum_diffrate_e_mag<<" "<<sum_diffrate_ebar_mag<<" "<<sum_diffrate_mu_mag<<" "<<sum_diffrate_mubar_mag<<" "<<sum_diffrate_tau_mag<<" "<<sum_diffrate_taubar_mag<<std::endl;
 	// Reset the format
      std::cout.unsetf(ios::fixed | ios::scientific);
-     
+
 	double events=0;
 	events = sum_diffrate_e_vec + sum_diffrate_ebar_vec + sum_diffrate_mu_vec+ sum_diffrate_mubar_vec+ sum_diffrate_tau_vec + sum_diffrate_taubar_vec;
 	events += sum_diffrate_e_axial + sum_diffrate_ebar_axial + sum_diffrate_mu_axial+ sum_diffrate_mubar_axial+ sum_diffrate_tau_axial + sum_diffrate_taubar_axial;
@@ -1113,23 +941,23 @@ int main(int argc, char * argv[] )
 
 	toteventsnumubar+= erecstep*(sum_diffrate_mubar_vec+sum_diffrate_mubar_axial+sum_diffrate_mubar_interf+sum_diffrate_mubar_mag);
 
-	
+
 	totevents+=events*erecstep;
 
 	toterecoil += events*Erec*erecstep;
 
 	// Increment bin for quenching
-	
+
 	iq++;
 
 
   } // End of loop over Erec
 
-   if (recoilupperthresh > recoilthresh) {
-      std::cout << "Total events over "<< recoilthresh*1000.<<" keVr and under "<<recoilupperthresh*1000<<" keVr: "<<totevents<< std::endl;
+   if (detresp->recoilupperthresh > detresp->recoilthresh) {
+      std::cout << "Total events over "<< detresp->recoilthresh*1000.<<" keVr and under "<<detresp->recoilupperthresh*1000<<" keVr: "<<totevents<< std::endl;
    }
    else {
-      std::cout << "Total events over "<< recoilthresh*1000.<<" keVr: "<<totevents<< std::endl;
+      std::cout << "Total events over "<< detresp->recoilthresh*1000.<<" keVr: "<<totevents<< std::endl;
    }
    std::cout << "Total recoil energy deposited:  "<< toterecoil<< std::endl;
 
@@ -1137,18 +965,18 @@ int main(int argc, char * argv[] )
 
 
   std::ofstream integraloutfile;
-  outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+material+"-"+ffname+"-integral.out";
+  outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+"-integral.out";
 
   std::cout << outfilename << std::endl;
   integraloutfile.open(outfilename);
 
-  
+
   integraloutfile << j << '\n';
-  if (recoilupperthresh > recoilthresh) {
-    integraloutfile << "Total events over "<< recoilthresh*1000.<<" keVr and under "<<recoilupperthresh*1000<<" keVr: "<<totevents<< std::endl;
+  if (detresp->recoilupperthresh > detresp->recoilthresh) {
+    integraloutfile << "Total events over "<< detresp->recoilthresh*1000.<<" keVr and under "<<detresp->recoilupperthresh*1000<<" keVr: "<<totevents<< std::endl;
   }
   else {
-    integraloutfile << "Total events over "<< recoilthresh*1000.<<" keVr: "<<totevents<< std::endl;
+    integraloutfile << "Total events over "<< detresp->recoilthresh*1000.<<" keVr: "<<totevents<< std::endl;
   }
   integraloutfile.close();
 
@@ -1157,17 +985,17 @@ int main(int argc, char * argv[] )
    // Loop over isotopes
 
 
-  v = isotope_component.begin();
+  v = detresp->isotope_component.begin();
   // Now loop over components
   is=0;
-  while( v != isotope_component.end()) {
-    
+  while( v != detresp->isotope_component.end()) {
+
     isotope = *v;
     //	  std::cout << "isotope"<< isotope << std::endl;
     std::string isoname = std::string(isotope);
-    
+
     std::ofstream isooutfile;
-    outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+material+"-"+ffname+"-"+isoname+".out";
+    outfilename = "out/sns_diff_rates-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+"-"+isoname+".out";
 
     std::cout << outfilename << std::endl;
     isooutfile.open(outfilename);
@@ -1177,7 +1005,7 @@ int main(int argc, char * argv[] )
 
       isooutfile << Er[ie]<< "  "<<dNdEr[is][ie]<<endl;
 
-      
+
     }
     isooutfile.close();
     v++;is++;
@@ -1186,7 +1014,7 @@ int main(int argc, char * argv[] )
   // Integrated over flavor and isotope
 
     std::ofstream allisooutfile;
-    outfilename = "out/sns_diff_rates_alliso-"+std::string(jsonfile)+"-"+material+"-"+ffname+".out";
+    outfilename = "out/sns_diff_rates_alliso-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+".out";
 
     std::cout << outfilename << std::endl;
     allisooutfile.open(outfilename);
@@ -1195,7 +1023,7 @@ int main(int argc, char * argv[] )
     for (ie=0;ie<iq;ie++) {
 
       allisooutfile << Er[ie]<< "  "<<dNdErall[ie]<<endl;
-    
+
     }
     allisooutfile.close();
 
@@ -1205,7 +1033,7 @@ int main(int argc, char * argv[] )
 
     // Don't have this broken down by flavor and interaction... need to do that
 
-    if (qfname != "none") {
+    if (detresp->qfname != "none") {
 
       double maxeee = 0;
       // One of these per component
@@ -1214,25 +1042,25 @@ int main(int argc, char * argv[] )
       // The total response
       std::map<double, double> _quenchedtot;
 
-      v = isotope_component.begin();
+      v = detresp->isotope_component.begin();
       // Now loop over components
       is=0;
 
-      while( v != isotope_component.end()) {
-	
+      while( v != detresp->isotope_component.end()) {
+
 	isotope = *v;
 	//	  std::cout << "isotope"<< isotope << std::endl;
 	std::string isoname = std::string(isotope);
-	
+
 	std::ofstream qisooutfile;
-	outfilename = "out/sns_diff_rates_quenched-"+std::string(jsonfile)+"-"+material+"-"+ffname+"-"+isoname+".out";
-	
+	outfilename = "out/sns_diff_rates_quenched-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+"-"+isoname+".out";
+
 	std::cout << outfilename << std::endl;
 	qisooutfile.open(outfilename);
-	
+
 	int ie;
 	for (ie=0;ie<iq;ie++) {
-	  
+
 	  if (Eee[is][ie]>maxeee) {maxeee = Eee[is][ie];}
 	  qisooutfile << Eee[is][ie]<< "  "<<dNdEee[is][ie]<<std::endl;
 	  _quenchedmap[is][Eee[is][ie]] = dNdEee[is][ie];
@@ -1248,8 +1076,8 @@ int main(int argc, char * argv[] )
       // Now interpolated rates for quenched, summed over components
 
       std::ofstream qoutfile;
-      outfilename = "out/sns_diff_rates_quenched-alliso-"+std::string(jsonfile)+"-"+material+"-"+ffname+".out";
-	
+      outfilename = "out/sns_diff_rates_quenched-alliso-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+".out";
+
       std::cout << outfilename << std::endl;
       qoutfile.open(outfilename);
 
@@ -1264,22 +1092,22 @@ int main(int argc, char * argv[] )
       double dndeee=0.;
 
       double nquenchedtot=0;
-      
+
       for (ieee=0;ieee<neeebin;ieee++) {
-	
+
 	eee += eeestep;
 	_quenchedtot[eee] = 0.;
 
 	// Now loop over components
-	v = isotope_component.begin();
+	v = detresp->isotope_component.begin();
 
 	is=0;
-	while( v != isotope_component.end()) {
-	  
+	while( v != detresp->isotope_component.end()) {
+
 	  isotope = *v;
 	  //	  std::cout << "isotope"<< isotope << std::endl;
 	  std::string isoname = std::string(isotope);
-	  
+
 	  // Interpolate dNdEee value for isotope is, at this eee
 	  // Should encapsulate this in an interpolation routine
 
@@ -1289,17 +1117,17 @@ int main(int argc, char * argv[] )
 	  if(i==_quenchedmap[is].end())
 	    {
 	      dndeee = (--i)->second;
-	    } else if (i==_quenchedmap[is].begin()) 
+	    } else if (i==_quenchedmap[is].begin())
 	    {
 	      dndeee =  i->second;
 	    } else {
 	    i_t l=i; --l;
-	  
+
 	    const double delta=(eee- l->first)/(i->first - l->first);
 	    dndeee= delta*i->second +(1-delta)*l->second;
-	  }	    
+	  }
 	  if (::isnan(dndeee)) {dndeee=0.;}
-	  
+
 	  _quenchedtot[eee] += dndeee;
 
 	  v++;is++;
@@ -1309,11 +1137,11 @@ int main(int argc, char * argv[] )
 
 	  // Apply the Eee efficiency here, if requested and not smeared
 	double eee_eff_factor = 0.;
-	if (gsname == "none"  && eff_type == "eee"){
-	  
-	  if (eee>=eethresh &&
-              (eeupperthresh > eethresh ? eee <= eeupperthresh : true)) {
-	    if (effname != "none") {
+	if (gsname == "none"  && detresp->eff_type == "eee"){
+
+	  if (eee>=detresp->eethresh &&
+              (detresp->eeupperthresh > detresp->eethresh ? eee <= detresp->eeupperthresh : true)) {
+	    if (detresp->effname != "none") {
 	      eee_eff_factor = detresp->efficnum(eee);
 	    } else {
 	      eee_eff_factor = 1;
@@ -1323,8 +1151,8 @@ int main(int argc, char * argv[] )
 	} else {
 	  eee_eff_factor = 1;
 	}
-	  
-	
+
+
       // Now output the total quenched output, per MeVee
 	qoutfile <<eee<<" "<<_quenchedtot[eee]*eee_eff_factor<<std::endl;
 	std::cout.unsetf(ios::fixed | ios::scientific);
@@ -1353,7 +1181,7 @@ int main(int argc, char * argv[] )
 
 
       if (gsname != "none") {
-	
+
 
 	// Read the smearing parameters from the file and set them
 	std::string gsfilename;
@@ -1375,8 +1203,8 @@ int main(int argc, char * argv[] )
       // Output the smeared output file
 
 	std::ofstream smoutfile;
-	outfilename = "out/sns_diff_rates_smeared-alliso-"+std::string(jsonfile)+"-"+material+"-"+ffname+".out";
-	
+	outfilename = "out/sns_diff_rates_smeared-alliso-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+".out";
+
 	std::cout << outfilename << std::endl;
 	smoutfile.open(outfilename);
 
@@ -1386,10 +1214,10 @@ int main(int argc, char * argv[] )
 
 	  // Apply the Eee efficiency here, if requested
 	  double eee_eff_factor = 1.;
-	  if (eeei>=eethresh &&
-              (eeupperthresh > eethresh ? eeei <= eeupperthresh : true)) {
-	    if (effname != "none" && eff_type == "eee"){
-	      eee_eff_factor = detresp->efficnum(eeei);	    
+	  if (eeei>=detresp->eethresh &&
+              (detresp->eeupperthresh > detresp->eethresh ? eeei <= detresp->eeupperthresh : true)) {
+	    if (detresp->effname != "none" && detresp->eff_type == "eee"){
+	      eee_eff_factor = detresp->efficnum(eeei);
 	    }
 	    eeei += eeestep;
 	    smoutfile << eeei<<" "<<_smearedmap[eeei]*eee_eff_factor<<std::endl;
@@ -1428,44 +1256,44 @@ int main(int argc, char * argv[] )
       std::string qcsmearing = j["detectorresponse"]["qcsmearing"];
 
       if (qcsmearing != "none") {
-      
+
 	int iqc;
 	double qc;
 
 	double totinqc = 0.;
 	int qcbinning = j["detectorresponse"]["qcbinning"];
-      
+
 	for (iqc=0;iqc<=int(maxqc);iqc+=qcbinning) {
 
 	  // Interpolate dNdqc from the quenchedmap
 
 	  qc = double(iqc);
 	  if (qc<=maxmeanqc+0.01) {
-	  
+
 
 	    typedef std::map<double, double>::const_iterator i_t;
-	  
+
 	    //	  double mevee = qc/qcperMeVee;
-	    
+
 	  // Do a more fine-grained interpolation and integrate over qc bin,
 	  // to reduce binned integration error
 	  // Not always really necessary
 
 	    double fracqc;
 	    double qcstep = 0.1*qcbinning;
-	  
+
 	    double dndqcinbin=0.;
 	    double dndqcinterp;
 	    double dndqc;
-	  
+
 	    // if <qc+0.5 includes last point
 	    for (fracqc=qc-0.5*qcbinning;fracqc<qc+0.49*qcbinning;fracqc+=qcstep) {
 	      if (fracqc>0) {
-		
+
 	      double mevee2 = fracqc/qcperMeVee;
-	      
+
 	      i_t i=_quenchedtot.upper_bound(mevee2);
-	      
+
 	      if(i==_quenchedtot.end())
 		{
 		  dndqc = (--i)->second;
@@ -1473,58 +1301,58 @@ int main(int argc, char * argv[] )
 	      else if (i==_quenchedtot.begin())
 		{
 		  dndqc =  i->second;
-		  
+
 		} else {
-		
+
 		i_t l=i; --l;
-		
+
 		const double delta=(mevee2- l->first)/(i->first - l->first);
 		dndqc = delta*i->second +(1-delta)*l->second;
 	      }
-	      dndqcinbin += dndqc*qcstep; 
-	      
+	      dndqcinbin += dndqc*qcstep;
+
 	      //	      std::cout <<qc <<" "<<fracqc<<" "<<mevee2<<" "<<dndqc*qcstep<<" "<<dndqcinbin<<std::endl;
-	      
+
 	      } // End of >0 qc case
-	      
+
 	  } // End of loop over fractional qc integration
 	    //	std::cout <<qc <<" "<<mevee<<" "<<dndqcinbin<<std::endl;
-	  
-	  
+
+
 	    dndqcinterp = dndqcinbin/qcperMeVee;
-	    
+
 	    if (::isnan(dndqcinterp)) {dndqcinterp=0.;}
-	  
+
 	  //	if (qc>0) {
-	    totinqc += dndqcinterp;	
+	    totinqc += dndqcinterp;
 	    //	}
 	    _qcmapall[qc] = dndqcinterp;
 
 	    //	    std::cout << qc<<" "<<dndqcinterp<<" "<<totinqc<<std::endl;
-	    
+
 	  } else {
-	    
+
 	    // Pad the end with zeroes to allow for smearing
 	    _qcmapall[qc] = 0.;
-	    
+
 	  } // end of qc<=maxmeanqc check
-	  
-	  
+
+
 	}
-	
+
 	std::cout << "Integral of qc dist, including zero bin: "<<totinqc<<std::endl;
-	
-	
+
+
 	// Poisson smear includes the zero bin
 	DetectorResponse* qcsmear = new DetectorResponse();
-	
+
 	qcsmear->SetQCBinning(qcbinning);
 	qcsmear->SetNSmearBin(int(maxqc/qcbinning)+1);
 	qcsmear->SetMaxSmearEn(double(int(maxqc)+1));
-	
+
 	if (qcsmearing == "poisson") {
 	  qcsmear->SetPoissonSmearingMatrix();
-	  
+
 	}  else if (qcsmearing == "gamma") {
 	    double gammasmearpars[2];
 	    gammasmearpars[0] = j["detectorresponse"]["aparam"];
@@ -1532,7 +1360,7 @@ int main(int argc, char * argv[] )
 	    qcsmear->SetGammaSmearPars(gammasmearpars);
 	    qcsmear->SetGammaSmearingMatrix();
 	}  else {
-	  
+
 	    std::string qcgsname = j["detectorresponse"]["qcgsname"];
 
 	    std::string qcsmearfilename;
@@ -1541,38 +1369,38 @@ int main(int argc, char * argv[] )
 	    qcsmear->ReadGSPolyFile();
 	    qcsmear->SetGaussSmearingMatrix();
 	}
-	
+
 
 	std::cout << "do qc smearing" <<std::endl;
 	// Do the smearing
 	std::map<double,double> _smearedqcmap = qcsmear->Smear(_qcmapall);
-	
-      
+
+
 	// Output the qc distribution, applying efficiency if requested
 	// (should not also have recoil or quenched efficiency)
-	
+
 	std::ofstream qcoutfile;
-	outfilename = "out/sns_diff_rates_qc-alliso-"+std::string(jsonfile)+"-"+material+"-"+ffname+".out";
-	
+	outfilename = "out/sns_diff_rates_qc-alliso-"+std::string(jsonfile)+"-"+detresp->material+"-"+ffname+".out";
+
 	std::cout << outfilename << std::endl;
 	qcoutfile.open(outfilename);
-	
+
 	double totev = 0.;
 	double totevunsmeared = 0.;
-	
+
 	for (iqc=0;iqc<=int(maxqc);iqc+=qcbinning) {
-	  
+
 	// Apply the qc efficiency here, if requested
-	
+
 	  qc = double(iqc);
 	  double qc_eff_factor = 1.;
-	
-	  if (iqc>=qcthresh &&
-              (qcupperthresh > qcthresh ? iqc <= qcupperthresh : true)) {
-	    if (effname != "none" && eff_type == "qc"){
-	      qc_eff_factor = detresp->efficnum(qc);	    
+
+	  if (iqc>=detresp->qcthresh &&
+              (detresp->qcupperthresh > detresp->qcthresh ? iqc <= detresp->qcupperthresh : true)) {
+	    if (detresp->effname != "none" && detresp->eff_type == "qc"){
+	      qc_eff_factor = detresp->efficnum(qc);
 	    }
-	  
+
 	    qcoutfile << iqc <<" "<<_smearedqcmap[qc]<<" "<<_smearedqcmap[qc]*qc_eff_factor<<" "<<_qcmapall[qc]<<" "<<_qcmapall[qc]*qc_eff_factor<<std::endl;
 
 	    //	    std::cout << iqc <<" "<<_smearedqcmap[qc]<<" "<<_smearedqcmap[qc]*qc_eff_factor<<" "<<_qcmapall[qc]<<" qc "<<qc<<" eff "<<qc_eff_factor<<" "<<_qcmapall[qc]*qc_eff_factor<<std::endl;
@@ -1582,11 +1410,11 @@ int main(int argc, char * argv[] )
 	    totevunsmeared += _qcmapall[qc]*qc_eff_factor;
 	  }
 	}
-      
+
 
 	qcoutfile.close();
 
-      
+
 	cout << "Total qc events: "<<totev<<" unsmeared "<<totevunsmeared<<endl;
 
       } // End of do qc smearing case
@@ -1596,11 +1424,12 @@ int main(int argc, char * argv[] )
 
     // Total flux-averaged xscn
 
-    Ntargets = 1.e6/(Mtot/amu)*6.0221409e23*detector_mass;
-    double totalnus = nuspersecperflavor*(wnue+wnumu+wnumubar)/(4*M_PI*dist*dist)*exposure;
-    double totalnue = nuspersecperflavor*wnue/(4*M_PI*dist*dist)*exposure;
-    double totalnumu = nuspersecperflavor*wnumu/(4*M_PI*dist*dist)*exposure;
-    double totalnumubar = nuspersecperflavor*wnumubar/(4*M_PI*dist*dist)*exposure;
+    double dist = j["distance"];
+    Ntargets = 1.e6/(Mtot/amu)*6.0221409e23*detresp->detector_mass;
+    double totalnus = snsflux->nuspersecperflavor*(snsflux->wnue+snsflux->wnumu+snsflux->wnumubar)/(4*M_PI*dist*dist)*snsflux->exposure;
+    double totalnue = snsflux->nuspersecperflavor*snsflux->wnue/(4*M_PI*dist*dist)*snsflux->exposure;
+    double totalnumu = snsflux->nuspersecperflavor*snsflux->wnumu/(4*M_PI*dist*dist)*snsflux->exposure;
+    double totalnumubar = snsflux->nuspersecperflavor*snsflux->wnumubar/(4*M_PI*dist*dist)*snsflux->exposure;
 
 
     std::cout << "Total flux-averaged cross section: "<< totevents/Ntargets/totalnus*1e40<<" x 10-40 cm^2"<<std::endl;
@@ -1614,7 +1443,7 @@ int main(int argc, char * argv[] )
     delete[] dNdEee;
     delete[] dNdEr;
     delete[] dNdErall;
-    
+
   return 0;
-  
+
 }
