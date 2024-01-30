@@ -15,7 +15,7 @@ using json = nlohmann::json;
 #include <math.h>
 #include <map>
 
-#include "xscns.h"
+#include "CrossSections/xscns.h"
 
 
 void get_flavor_weight(int, double,double,double*,double*, double*, double*);
@@ -35,6 +35,15 @@ int main(int argc, char * argv[] )
   const char * jsonfile = argv[1];
 
   std::string jsonfilename = "jsonfiles/"+std::string(jsonfile)+".json";
+
+  // creating variables
+  double M;
+  double Delta;
+  int Nn,Z,A;
+  int Zdiff, Ndiff;
+
+  double Ntargets = 0; // Total targets
+  int is=0;
 
 
 // Read a JSON file with the parameters
@@ -90,15 +99,6 @@ int main(int argc, char * argv[] )
   outfile.open(outfilename);
   std::cout << outfilename <<std::endl;
 
-  double M;
-  double Delta;
-  int Nn,Z,A;
-  int Zdiff, Ndiff;
-
-
-
-  double Ntargets = 0; // Total targets
-  int is=0;
   std::vector<std::string>::iterator v = detresp -> isotope_component.begin();
   std::string isotope;
 
@@ -123,13 +123,9 @@ int main(int argc, char * argv[] )
     M = (Z+Nn)*amu - Z*me + Delta;
     if (M<minM) {minM=M;}
     Mtot += M*detresp->fraction[is];
-    //erecmaxvals[is] = 2*kmax*kmax/(M+2*kmax);
 
 
     // Set up the form factor for this isotope
-
-    //       std::cout << "Mass "<<M<<std::endl;
-
 
     double nvrfact = j["formfactor"]["nvrfact"];
     double narfact = j["formfactor"]["narfact"];
@@ -139,69 +135,24 @@ int main(int argc, char * argv[] )
 
     if (ffname == "helm") {
 
-      double nvsfact = j["formfactor"]["nvsfact"];
-      double nasfact = j["formfactor"]["nasfact"];
-      double pvsfact = j["formfactor"]["pvsfact"];
-      double pasfact = j["formfactor"]["pasfact"];
+      ffnv[is] = new Helm(j["formfactor"]["nvsfact"],j["formfactor"]["nvrfact"]);
 
+      ffna[is] = new Helm(j["formfactor"]["nasfact"],j["formfactor"]["narfact"]);
 
-      Helm* helmffnv= new Helm();
-      ffnv[is] = helmffnv;
-      helmffnv->Setsval(nvsfact);
-      helmffnv->SetRfac(nvrfact);
+      ffpv[is] = new Helm(j["formfactor"]["pvsfact"],j["formfactor"]["pvrfact"]);
 
-      Helm* helmffna= new Helm();
-      ffna[is] = helmffna;
-      helmffna->Setsval(nasfact);
-      helmffna->SetRfac(narfact);
-
-      Helm* helmffpv= new Helm();
-      ffpv[is] = helmffpv;
-      helmffpv->Setsval(pvsfact);
-      helmffpv->SetRfac(pvrfact);
-
-
-      Helm* helmffpa= new Helm();
-      ffpa[is] = helmffpa;
-      helmffpa->Setsval(pasfact);
-      helmffpa->SetRfac(parfact);
+      ffpa[is] = new Helm(j["formfactor"]["pasfact"],j["formfactor"]["parfact"]);
 
     }
     else if (ffname == "klein") {
 
-      double nvak = j["formfactor"]["nvak"];
-      double naak = j["formfactor"]["naak"];
-      double pvak = j["formfactor"]["pvak"];
-      double paak = j["formfactor"]["paak"];
-      double nvskin = j["formfactor"]["nvskin"];
-      double naskin = j["formfactor"]["naskin"];
-      double pvskin = j["formfactor"]["pvskin"];
-      double paskin = j["formfactor"]["paskin"];
+      ffnv[is] = new Klein(j["formfactor"]["nvak"],j["formfactor"]["nvskin"],j["formfactor"]["nvrfact"]);
 
-      Klein* kleinffnv = new Klein();
-      ffnv[is] = kleinffnv;
-      kleinffnv->Setakval(nvak);
-      kleinffnv->SetRfac(nvrfact);
-      kleinffnv->Setskinfac(nvskin);
+      ffna[is] = new Klein(j["formfactor"]["naak"],j["formfactor"]["naskin"],j["formfactor"]["narfact"]);
 
-      Klein* kleinffna = new Klein();
-      ffna[is] = kleinffna;
-      kleinffna->Setakval(naak);
-      kleinffna->SetRfac(narfact);
-      kleinffna->Setskinfac(naskin);
+      ffpv[is] = new Klein(j["formfactor"]["pvak"],j["formfactor"]["pvskin"],j["formfactor"]["pvrfact"]);
 
-      Klein* kleinffpv = new Klein();
-      ffpv[is] = kleinffpv;
-      kleinffpv->Setakval(pvak);
-      kleinffpv->SetRfac(pvrfact);
-      kleinffpv->Setskinfac(pvskin);
-
-
-      Klein* kleinffpa = new Klein();
-      ffpa[is] = kleinffpa;
-      kleinffpa->Setakval(paak);
-      kleinffpa->SetRfac(parfact);
-      kleinffpv->Setskinfac(paskin);
+      ffpa[is] = new Klein(j["formfactor"]["paak"],j["formfactor"]["paskin"],j["formfactor"]["parfact"]);
 
 
     }
@@ -259,7 +210,6 @@ int main(int argc, char * argv[] )
     }
 
   // Set up detector quenching factors for each component
-
 
     if (detresp->qftype == "poly") {
       std::string qffilename;
@@ -785,7 +735,6 @@ int main(int argc, char * argv[] )
 
 
 
-	   //    std::cout << Erec << " "<<knu<<" "<<snsflux->fluxval(knu,1,knustep)<<" "<<diffrate_e_vec<<std::endl;
 
 	 } // End of loop over neutrino energy contributions
 
@@ -884,10 +833,6 @@ int main(int argc, char * argv[] )
 	  }
 
 
-	  //	 std::cout << is<<" "<<"Erec "<<Erec<<" mass frac "<<mass_fraction[is]<<" "<<" ntfac "<<ntfac<<" GV "<<GV_wff<<" GA "<<GA_wff<<std::endl;
-
-	  //	 cout << "is, rate "<<is<<" "<<diffrate_e_vec[is]<<endl;
-
 	 v++;is++;
 
 
@@ -895,33 +840,9 @@ int main(int argc, char * argv[] )
 
      } // End of efficiency factor check
 
-     //     std::cout <<Erec<<scientific<<" "<<sum_diffrate_e_vec<<" "<<sum_diffrate_ebar_vec<<" "<<sum_diffrate_mu_vec<<" "<<sum_diffrate_mubar_vec<<" "<<sum_diffrate_tau_vec<<" "<<sum_diffrate_taubar_vec<<" "<<sum_diffrate_e_axial<<" "<<sum_diffrate_ebar_axial<<" "<<sum_diffrate_mu_axial<<" "<<sum_diffrate_mubar_axial<<" "<<sum_diffrate_tau_axial<<" "<<sum_diffrate_taubar_axial<<" "<<sum_diffrate_e_interf<<" "<<sum_diffrate_ebar_interf<<" "<<sum_diffrate_mu_interf<<" "<<sum_diffrate_mubar_interf<<" "<<sum_diffrate_tau_interf<<" "<<sum_diffrate_taubar_interf <<std::endl;
 
      // Only want diff values in scientific format
      std::cout.unsetf(ios::fixed | ios::scientific);
-
-
-//      sum_diffrate_e_vec *= norm_factor*wnue;
-//      sum_diffrate_ebar_vec *= norm_factor;
-//      sum_diffrate_mu_vec *= norm_factor*wnumu;
-//      sum_diffrate_mubar_vec *= norm_factor*wnumubar;
-//      sum_diffrate_tau_vec *= norm_factor;
-//      sum_diffrate_taubar_vec *= norm_factor;
-
-//      sum_diffrate_e_axial *= norm_factor*wnue;
-//      sum_diffrate_ebar_axial *= norm_factor;
-//      sum_diffrate_mu_axial *= norm_factor*wnumu;
-//      sum_diffrate_mubar_axial *= norm_factor*wnumubar;
-//      sum_diffrate_tau_axial *= norm_factor;
-//      sum_diffrate_taubar_axial *= norm_factor;
-
-//      sum_diffrate_e_interf *= norm_factor*wnue;
-//      sum_diffrate_ebar_interf *= norm_factor;
-//      sum_diffrate_mu_interf *= norm_factor*wnumu;
-//      sum_diffrate_mubar_interf *= norm_factor*wnumubar;
-//      sum_diffrate_tau_interf *= norm_factor;
-//      sum_diffrate_taubar_interf *= norm_factor;
-
 
 
      outfile << Erec<<scientific<<" "<<sum_diffrate_e_vec<<" "<<sum_diffrate_ebar_vec<<" "<<sum_diffrate_mu_vec<<" "<<sum_diffrate_mubar_vec<<" "<<sum_diffrate_tau_vec<<" "<<sum_diffrate_taubar_vec<<" "<<sum_diffrate_e_axial<<" "<<sum_diffrate_ebar_axial<<" "<<sum_diffrate_mu_axial<<" "<<sum_diffrate_mubar_axial<<" "<<sum_diffrate_tau_axial<<" "<<sum_diffrate_taubar_axial<<" "<<sum_diffrate_e_interf<<" "<<sum_diffrate_ebar_interf<<" "<<sum_diffrate_mu_interf<<" "<<sum_diffrate_mubar_interf<<" "<<sum_diffrate_tau_interf<<" "<<sum_diffrate_taubar_interf <<" "<<sum_diffrate_e_mag<<" "<<sum_diffrate_ebar_mag<<" "<<sum_diffrate_mu_mag<<" "<<sum_diffrate_mubar_mag<<" "<<sum_diffrate_tau_mag<<" "<<sum_diffrate_taubar_mag<<std::endl;

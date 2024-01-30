@@ -13,15 +13,15 @@ class FormFactor
 {
 
  protected:
-
-  int A; 
+  int A;
   int Z;
   double Rfac = 1;
 
   char fftype[80];
- 
 
- public: 
+
+
+ public:
   FormFactor();
   FormFactor(const char *);
   ~FormFactor(){};
@@ -51,10 +51,11 @@ class Helm: public FormFactor {
   double sval;
 
  public:
+  Helm(double s, double Rf);
   Helm() : FormFactor("helm") {}
   double FFval(double);
   void Setsval(double);
-  double Getsval(); 
+  double Getsval();
 
 };
 
@@ -65,10 +66,11 @@ class Klein: public FormFactor {
   double skinfac=0;
 
  public:
+  Klein(double ak, double sf, double Rf);
   Klein() : FormFactor("klein") {}
   double FFval(double);
   void Setakval(double);
-  double Getakval(); 
+  double Getakval();
 
   // Skin factor (zero for protons), used for some form factors
 
