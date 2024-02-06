@@ -20,6 +20,7 @@ Coupling::Coupling(){
 
 
 Xscn::Xscn(){
+        name="xscn";
         double drate_e_vec=0;
         double drate_ebar_vec=0;
         double drate_mu_vec=0;
@@ -29,6 +30,7 @@ Xscn::Xscn(){
 }
 
 VectorXscn::VectorXscn(){
+        name="vector";
         double drate_e_vec=0;
         double drate_ebar_vec=0;
         double drate_mu_vec=0;
@@ -38,6 +40,7 @@ VectorXscn::VectorXscn(){
 }
 
 AxialXscn::AxialXscn(){
+        name="axial";
         double drate_e_vec=0;
         double drate_ebar_vec=0;
         double drate_mu_vec=0;
@@ -47,6 +50,7 @@ AxialXscn::AxialXscn(){
 }
 
 InterfXscn::InterfXscn(){
+        name="interference";
         double drate_e_vec=0;
         double drate_ebar_vec=0;
         double drate_mu_vec=0;
@@ -56,6 +60,7 @@ InterfXscn::InterfXscn(){
 }
 
 MagXscn::MagXscn(){
+        name="magnetic";
         double drate_e_vec=0;
         double drate_ebar_vec=0;
         double drate_mu_vec=0;
@@ -138,6 +143,47 @@ void MagXscn::calc_drate(double mass, double erec, NuFlux *flux){
     }
 
 }
+
+
+void VectorXscn::calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings){
+	 diffrate_e[is] += ntfac*pow(couplings->GV_wff_e,2)*mass_fraction[is]*drate_e*flux->wnue;
+	 diffrate_ebar[is] += ntfac*pow(couplings->GV_wff_ebar,2)*mass_fraction[is]*drate_ebar;
+	 diffrate_mu[is] += ntfac*pow(couplings->GV_wff_mu,2)*mass_fraction[is]*drate_mu*mufact*flux->wnumu;
+	 diffrate_mubar[is] += ntfac*pow(couplings->GV_wff_mubar,2)*mass_fraction[is]*drate_mubar*mufact*flux->wnumubar;
+	 diffrate_tau[is] +=  ntfac*pow(couplings->GV_wff_tau,2)*mass_fraction[is]*drate_tau;
+	 diffrate_taubar[is] += ntfac*pow(couplings->GV_wff_taubar,2)*mass_fraction[is]*drate_taubar;
+}
+
+void AxialXscn::calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings){
+	 diffrate_e[is] += ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*drate_e*flux->wnue;
+	 diffrate_ebar[is] += ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*drate_ebar;
+	 diffrate_mu[is] += ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*drate_mu*mufact*flux->wnumu;
+	 diffrate_mubar[is] += ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*drate_mubar*mufact*flux->wnumubar;
+	 diffrate_tau[is] +=  ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*drate_tau;
+	 diffrate_taubar[is] +=  ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*drate_taubar;
+}
+
+
+void InterfXscn::calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings){
+	 diffrate_e[is] += ntfac*couplings->GV_wff_e*couplings->GA_wff*mass_fraction[is]*drate_e*flux->wnue;
+	 diffrate_ebar[is] += ntfac*couplings->GV_wff_ebar*couplings->GA_bar_wff*mass_fraction[is]*drate_ebar;
+	 diffrate_mu[is] += ntfac*couplings->GV_wff_mu*couplings->GA_wff*mass_fraction[is]*drate_mu*mufact*flux->wnumu;
+	 diffrate_mubar[is] += ntfac*couplings->GV_wff_mubar*couplings->GA_bar_wff*mass_fraction[is]*drate_mubar*mufact*flux->wnumubar;
+	 diffrate_tau[is] +=  ntfac*couplings->GV_wff_tau*couplings->GA_wff*mass_fraction[is]*drate_tau;
+	 diffrate_taubar[is] +=  ntfac*couplings->GV_wff_taubar*couplings->GA_bar_wff*mass_fraction[is]*drate_taubar;
+}
+
+
+void MagXscn::calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings){
+	    diffrate_e[is] += ntfac*pow(couplings->munu_e,2)*pow(Z,2)*mass_fraction[is]*drate_e*flux->wnue;
+	    diffrate_ebar[is] += ntfac*pow(couplings->munu_ebar,2)*pow(Z,2)*mass_fraction[is]*drate_ebar;
+	    diffrate_mu[is] += ntfac*pow(couplings->munu_mu,2)*pow(Z,2)*mass_fraction[is]*drate_mu*flux->wnumu;
+	    diffrate_mubar[is] += ntfac*pow(couplings->munu_mubar,2)*pow(Z,2)*mass_fraction[is]*drate_mubar*flux->wnumubar;
+	    diffrate_tau[is] +=  ntfac*pow(couplings->munu_tau,2)*pow(Z,2)*mass_fraction[is]*drate_tau;
+	    diffrate_taubar[is] +=  ntfac*pow(couplings->munu_taubar,2)*pow(Z,2)*mass_fraction[is]*drate_taubar;
+}
+
+
 
 double diffxscnvec(double knu, double mass, double erec) {
 

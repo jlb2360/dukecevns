@@ -32,6 +32,8 @@ class Coupling {
 class Xscn{
 
     public:
+        std::string name;
+
 	    double drate_e=0;
 	    double drate_ebar=0;
 	    double drate_mu=0;
@@ -41,6 +43,24 @@ class Xscn{
         double knuMin=0;
         double knuMax=0;
         double knuStep=0;
+
+
+        // Contributions for each component
+        double diffrate_e[15] = {0.};
+        double diffrate_ebar[15] = {0.};
+        double diffrate_mu[15] = {0.};
+        double diffrate_mubar[15] = {0.};
+        double diffrate_tau[15] = {0.};
+        double diffrate_taubar[15] = {0.};
+
+        double sum_diffrate_e=0;
+        double sum_diffrate_ebar=0;
+        double sum_diffrate_mu=0;
+        double sum_diffrate_mubar=0;
+        double sum_diffrate_tau=0;
+        double sum_diffrate_taubar=0;
+
+        int Z=0;
 
         Xscn();
 
@@ -52,10 +72,32 @@ class Xscn{
             drate_tau=0;
             drate_taubar=0;}
 
+        void Set_Z(double z) {Z=z;}
+
+        void Set_diffrate_0() {
+            for (int i=0; i<15; i++) {
+                diffrate_e[i]=0;
+                diffrate_ebar[i]=0;
+                diffrate_mu[i]=0;
+                diffrate_mubar[i]=0;
+                diffrate_tau[i]=0;
+                diffrate_taubar[i]=0;
+            }
+
+            sum_diffrate_e=0;
+            sum_diffrate_ebar=0;
+            sum_diffrate_mu=0;
+            sum_diffrate_mubar=0;
+            sum_diffrate_tau=0;
+            sum_diffrate_taubar=0;
+        }
+
         void Set_knu(double min, double max, double step);
 
 
         virtual void calc_drate(double mass, double erec, NuFlux *flux)=0;//needs to be overloaded
+
+        virtual void calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings)=0;
 
 };
 
@@ -64,24 +106,28 @@ class VectorXscn : public Xscn {
     public:
         VectorXscn();
         void calc_drate(double mass, double erec,NuFlux *flux);
+        void calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings);
 };
 
 class AxialXscn : public Xscn {
     public:
         AxialXscn();
         void calc_drate(double mass, double erec,NuFlux *flux);
+        void calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings);
 };
 
 class InterfXscn : public Xscn {
     public:
         InterfXscn();
         void calc_drate(double mass, double erec,NuFlux *flux);
+        void calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings);
 };
 
 class MagXscn : public Xscn {
     public:
         MagXscn();
         void calc_drate(double mass, double erec,NuFlux *flux);
+        void calc_diffrate(int is, double mufact, double ntfac, double mass_fraction[15], NuFlux *flux, Coupling *couplings);
 };
 
 

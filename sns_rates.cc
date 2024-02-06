@@ -1,3 +1,4 @@
+#include <ios>
 #include <iostream>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -306,6 +307,9 @@ int main(int argc, char * argv[] )
    double toteventsnutau= 0.;
    double toteventsnutaubar = 0.;
 
+    queue<Xscn*> tempQ;
+    queue<Xscn*> tempQ2;
+    Xscn* xscn;
 
    int iq=0;
    // Loop over recoil energy
@@ -313,68 +317,19 @@ int main(int argc, char * argv[] )
 
      Er[iq] = Erec;
 
-     // Contributions for each component
-     double diffrate_e_vec[max_components]={0.};
-     double diffrate_ebar_vec[max_components]={0.};
-     double diffrate_mu_vec[max_components]={0.};
-     double diffrate_mubar_vec[max_components]={0.};
-     double diffrate_tau_vec[max_components]={0.};
-     double diffrate_taubar_vec[max_components]={0.};
+     while (!xscnQ.empty()) {
+         xscn = xscnQ.front();
+         xscnQ.pop();
+         tempQ2.push(xscn);
 
-     double diffrate_e_axial[max_components]={0.};
-     double diffrate_ebar_axial[max_components]={0.};
-     double diffrate_mu_axial[max_components]={0.};
-     double diffrate_mubar_axial[max_components]={0.};
-     double diffrate_tau_axial[max_components]={0.};
-     double diffrate_taubar_axial[max_components]={0.};
+         xscn->Set_diffrate_0();
+     }
 
-     double diffrate_e_interf[max_components]={0.};
-     double diffrate_ebar_interf[max_components]={0.};
-     double diffrate_mu_interf[max_components]={0.};
-     double diffrate_mubar_interf[max_components]={0.};
-     double diffrate_tau_interf[max_components]={0.};
-     double diffrate_taubar_interf[max_components]={0.};
-
-     double diffrate_e_mag[max_components]={0.};
-     double diffrate_ebar_mag[max_components]={0.};
-     double diffrate_mu_mag[max_components]={0.};
-     double diffrate_mubar_mag[max_components]={0.};
-     double diffrate_tau_mag[max_components]={0.};
-     double diffrate_taubar_mag[max_components]={0.};
-
-
-
-     // Sum for each component,  not quenched
-
-     double sum_diffrate_e_vec=0;
-     double sum_diffrate_ebar_vec=0;
-     double sum_diffrate_mu_vec=0;
-     double sum_diffrate_mubar_vec=0;
-     double sum_diffrate_tau_vec=0;
-     double sum_diffrate_taubar_vec=0;
-
-     double sum_diffrate_e_axial=0;
-     double sum_diffrate_ebar_axial=0;
-     double sum_diffrate_mu_axial=0;
-     double sum_diffrate_mubar_axial=0;
-     double sum_diffrate_tau_axial=0;
-     double sum_diffrate_taubar_axial=0;
-
-     double sum_diffrate_e_interf=0;
-     double sum_diffrate_ebar_interf=0;
-     double sum_diffrate_mu_interf=0;
-     double sum_diffrate_mubar_interf=0;
-     double sum_diffrate_tau_interf=0;
-     double sum_diffrate_taubar_interf=0;
-
-     double sum_diffrate_e_mag=0;
-     double sum_diffrate_ebar_mag=0;
-     double sum_diffrate_mu_mag=0;
-     double sum_diffrate_mubar_mag=0;
-     double sum_diffrate_tau_mag=0;
-     double sum_diffrate_taubar_mag=0;
-
-
+    while (!tempQ2.empty()){
+        xscn = tempQ2.front();
+        tempQ2.pop();
+        xscnQ.push(xscn);
+    }
 
      // With efficiency, which is a function of Erec in MeV in this formuation
 
@@ -465,113 +420,44 @@ int main(int argc, char * argv[] )
 	 }
 
 
-     queue<Xscn*> tempQ;
-
-     Xscn* xscn;
-
      while (!xscnQ.empty()) {
          xscn = xscnQ.front();
          xscnQ.pop();
-         tempQ.push(xscn);
 
          xscn->Set_0();
          xscn->Set_knu(knumin, kmax, knustep);
 
          xscn->calc_drate(M, Erec, snsflux);
+         tempQ.push(xscn);
      }
+
+
 
 	 // Now multiply by target-dependent factors and add up this recoil energy bin
 
      double mufact = 1;
+	 double sum_events_iso = 0;
 
-
-     xscn = tempQ.front();
-     tempQ.pop();
-     xscnQ.push(xscn);
-	 diffrate_e_vec[is] += ntfac*pow(couplings->GV_wff_e,2)*mass_fraction[is]*xscn->drate_e*snsflux->wnue;
-	 diffrate_ebar_vec[is] += ntfac*pow(couplings->GV_wff_ebar,2)*mass_fraction[is]*xscn->drate_ebar;
-	 diffrate_mu_vec[is] += ntfac*pow(couplings->GV_wff_mu,2)*mass_fraction[is]*xscn->drate_mu*mufact*snsflux->wnumu;
-	 diffrate_mubar_vec[is] += ntfac*pow(couplings->GV_wff_mubar,2)*mass_fraction[is]*xscn->drate_mubar*mufact*snsflux->wnumubar;
-	 diffrate_tau_vec[is] +=  ntfac*pow(couplings->GV_wff_tau,2)*mass_fraction[is]*xscn->drate_tau;
-	 diffrate_taubar_vec[is] += ntfac*pow(couplings->GV_wff_taubar,2)*mass_fraction[is]*xscn->drate_taubar;
-
-     xscn = tempQ.front();
-     tempQ.pop();
-     xscnQ.push(xscn);
-
-	 diffrate_e_axial[is] += ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*xscn->drate_e*snsflux->wnue;
-	 diffrate_ebar_axial[is] += ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*xscn->drate_ebar;
-	 diffrate_mu_axial[is] += ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*xscn->drate_mu*mufact*snsflux->wnumu;
-	 diffrate_mubar_axial[is] += ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*xscn->drate_mubar*mufact*snsflux->wnumubar;
-	 diffrate_tau_axial[is] +=  ntfac*pow(couplings->GA_wff,2)*mass_fraction[is]*xscn->drate_tau;
-	 diffrate_taubar_axial[is] +=  ntfac*pow(couplings->GA_bar_wff,2)*mass_fraction[is]*xscn->drate_taubar;
-
-     xscn = tempQ.front();
-     tempQ.pop();
-     xscnQ.push(xscn);
-
-	 diffrate_e_interf[is] += ntfac*couplings->GV_wff_e*couplings->GA_wff*mass_fraction[is]*xscn->drate_e*snsflux->wnue;
-	 diffrate_ebar_interf[is] += ntfac*couplings->GV_wff_ebar*couplings->GA_bar_wff*mass_fraction[is]*xscn->drate_ebar;
-	 diffrate_mu_interf[is] += ntfac*couplings->GV_wff_mu*couplings->GA_wff*mass_fraction[is]*xscn->drate_mu*mufact*snsflux->wnumu;
-	 diffrate_mubar_interf[is] += ntfac*couplings->GV_wff_mubar*couplings->GA_bar_wff*mass_fraction[is]*xscn->drate_mubar*mufact*snsflux->wnumubar;
-	 diffrate_tau_interf[is] +=  ntfac*couplings->GV_wff_tau*couplings->GA_wff*mass_fraction[is]*xscn->drate_tau;
-	 diffrate_taubar_interf[is] +=  ntfac*couplings->GV_wff_taubar*couplings->GA_bar_wff*mass_fraction[is]*xscn->drate_taubar;
-
-     if (j.find("magmon") != j.end()) {
+     while (!tempQ.empty()){
         xscn = tempQ.front();
         tempQ.pop();
+
+        if (xscn->name == "magnetic"){
+            xscn->Set_Z(Z);
+        }
+
+        xscn->calc_diffrate(is, mufact, ntfac, mass_fraction, snsflux, couplings);
+
+        sum_events_iso += xscn->diffrate_e[is] + xscn->diffrate_ebar[is] + xscn->diffrate_mu[is]+ xscn->diffrate_mubar[is]+ xscn->diffrate_tau[is] + xscn->diffrate_taubar[is];
+
+        xscn->sum_diffrate_e += xscn->diffrate_e[is]*norm_factor*recoil_eff_factor;
+        xscn->sum_diffrate_ebar += xscn->diffrate_ebar[is]*norm_factor*recoil_eff_factor;
+        xscn->sum_diffrate_mu += xscn->diffrate_mu[is]*norm_factor*recoil_eff_factor;
+        xscn->sum_diffrate_mubar += xscn->diffrate_mubar[is]*norm_factor*recoil_eff_factor;
+        xscn->sum_diffrate_tau += xscn->diffrate_tau[is]*norm_factor*recoil_eff_factor;
         xscnQ.push(xscn);
-	    diffrate_e_mag[is] += ntfac*pow(couplings->munu_e,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_e*snsflux->wnue;
-	    diffrate_ebar_mag[is] += ntfac*pow(couplings->munu_ebar,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_ebar;
-	    diffrate_mu_mag[is] += ntfac*pow(couplings->munu_mu,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_mu*snsflux->wnumu;
-	    diffrate_mubar_mag[is] += ntfac*pow(couplings->munu_mubar,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_mubar*snsflux->wnumubar;
-	    diffrate_tau_mag[is] +=  ntfac*pow(couplings->munu_tau,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_tau;
-	    diffrate_taubar_mag[is] +=  ntfac*pow(couplings->munu_taubar,2)*pow(Z,2)*mass_fraction[is]*xscn->drate_taubar;
+
      }
-
-	  // Now add the contribution from this isotope to the sum
-
-
-	 sum_diffrate_e_vec += diffrate_e_vec[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_ebar_vec += diffrate_ebar_vec[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mu_vec += diffrate_mu_vec[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mubar_vec += diffrate_mubar_vec[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_tau_vec += diffrate_tau_vec[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_taubar_vec += diffrate_taubar_vec[is]*norm_factor*recoil_eff_factor;
-
-	 sum_diffrate_e_axial += diffrate_e_axial[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_ebar_axial += diffrate_ebar_axial[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mu_axial += diffrate_mu_axial[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mubar_axial += diffrate_mubar_axial[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_tau_axial += diffrate_tau_axial[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_taubar_axial += diffrate_taubar_axial[is]*norm_factor*recoil_eff_factor;
-
-	 sum_diffrate_e_interf += diffrate_e_interf[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_ebar_interf += diffrate_ebar_interf[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mu_interf += diffrate_mu_interf[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mubar_interf += diffrate_mubar_interf[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_tau_interf += diffrate_tau_interf[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_taubar_interf += diffrate_taubar_interf[is]*norm_factor*recoil_eff_factor;
-
-
-	 sum_diffrate_e_mag += diffrate_e_mag[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_ebar_mag += diffrate_ebar_mag[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mu_mag += diffrate_mu_mag[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_mubar_mag += diffrate_mubar_mag[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_tau_mag += diffrate_tau_mag[is]*norm_factor*recoil_eff_factor;
-	 sum_diffrate_taubar_mag += diffrate_taubar_mag[is]*norm_factor*recoil_eff_factor;
-
-
-
-	  // Sum for this Erec and isotope
-	  double sum_events_iso = 0;
-	  sum_events_iso = diffrate_e_vec[is] + diffrate_ebar_vec[is] + diffrate_mu_vec[is]+ diffrate_mubar_vec[is]+ diffrate_tau_vec[is] + diffrate_taubar_vec[is];
-	  sum_events_iso += diffrate_e_axial[is] + diffrate_ebar_axial[is] + diffrate_mu_axial[is]+ diffrate_mubar_axial[is]+ diffrate_tau_axial[is] + diffrate_taubar_axial[is];
-
-	  sum_events_iso+= diffrate_e_interf[is] + diffrate_ebar_interf[is] + diffrate_mu_interf[is]+ diffrate_mubar_interf[is]+ diffrate_tau_interf[is] + diffrate_taubar_interf[is];
-
-
-	  sum_events_iso+= diffrate_e_mag[is] + diffrate_ebar_mag[is] + diffrate_mu_mag[is]+ diffrate_mubar_mag[is]+ diffrate_tau_mag[is] + diffrate_taubar_mag[is];
 
 
 
@@ -582,6 +468,7 @@ int main(int argc, char * argv[] )
 
 	  dNdEr[is][iq] = sum_events_iso;
 	  dNdErall[iq] += sum_events_iso;
+
 
 	  if (qfderiv>0) {
 	    dNdEee[is][iq] = sum_events_iso/qfderiv;
@@ -598,27 +485,44 @@ int main(int argc, char * argv[] )
      } // End of efficiency factor check
 
 
+
      // Only want diff values in scientific format
      std::cout.unsetf(ios::fixed | ios::scientific);
 
-
-     outfile << Erec<<scientific<<" "<<sum_diffrate_e_vec<<" "<<sum_diffrate_ebar_vec<<" "<<sum_diffrate_mu_vec<<" "<<sum_diffrate_mubar_vec<<" "<<sum_diffrate_tau_vec<<" "<<sum_diffrate_taubar_vec<<" "<<sum_diffrate_e_axial<<" "<<sum_diffrate_ebar_axial<<" "<<sum_diffrate_mu_axial<<" "<<sum_diffrate_mubar_axial<<" "<<sum_diffrate_tau_axial<<" "<<sum_diffrate_taubar_axial<<" "<<sum_diffrate_e_interf<<" "<<sum_diffrate_ebar_interf<<" "<<sum_diffrate_mu_interf<<" "<<sum_diffrate_mubar_interf<<" "<<sum_diffrate_tau_interf<<" "<<sum_diffrate_taubar_interf <<" "<<sum_diffrate_e_mag<<" "<<sum_diffrate_ebar_mag<<" "<<sum_diffrate_mu_mag<<" "<<sum_diffrate_mubar_mag<<" "<<sum_diffrate_tau_mag<<" "<<sum_diffrate_taubar_mag<<std::endl;
-	// Reset the format
-     std::cout.unsetf(ios::fixed | ios::scientific);
-
 	double events=0;
-	events = sum_diffrate_e_vec + sum_diffrate_ebar_vec + sum_diffrate_mu_vec+ sum_diffrate_mubar_vec+ sum_diffrate_tau_vec + sum_diffrate_taubar_vec;
-	events += sum_diffrate_e_axial + sum_diffrate_ebar_axial + sum_diffrate_mu_axial+ sum_diffrate_mubar_axial+ sum_diffrate_tau_axial + sum_diffrate_taubar_axial;
-        events += sum_diffrate_e_interf + sum_diffrate_ebar_interf + sum_diffrate_mu_interf+ sum_diffrate_mubar_interf+ sum_diffrate_tau_interf + sum_diffrate_taubar_interf;
 
-        events += sum_diffrate_e_mag + sum_diffrate_ebar_mag + sum_diffrate_mu_mag+ sum_diffrate_mubar_mag+ sum_diffrate_tau_mag + sum_diffrate_taubar_mag;
+    outfile << Erec << scientific;
 
-	toteventsnue+= erecstep*(sum_diffrate_e_vec+sum_diffrate_e_axial+sum_diffrate_e_interf+sum_diffrate_e_mag);
+    while (!xscnQ.empty()){
+        xscn = xscnQ.front();
+        xscnQ.pop();
+        tempQ.push(xscn);
 
-	toteventsnumu+= erecstep*(sum_diffrate_mu_vec+sum_diffrate_mu_axial+sum_diffrate_mu_interf+sum_diffrate_mu_mag);
+        outfile << " "<<xscn->sum_diffrate_e<<" "<<xscn->sum_diffrate_ebar<<" "<<xscn->sum_diffrate_mu<<" "<<xscn->sum_diffrate_mubar<<" "<<xscn->sum_diffrate_tau<<" "<<xscn->sum_diffrate_taubar<<std::endl;
 
-	toteventsnumubar+= erecstep*(sum_diffrate_mubar_vec+sum_diffrate_mubar_axial+sum_diffrate_mubar_interf+sum_diffrate_mubar_mag);
+        events += xscn->sum_diffrate_e + xscn->sum_diffrate_ebar + xscn->sum_diffrate_mu + xscn->sum_diffrate_mubar + xscn->sum_diffrate_tau + xscn->sum_diffrate_taubar;
+        toteventsnue += (xscn->sum_diffrate_e);
+        toteventsnumu += (xscn->sum_diffrate_mu);
+        toteventsnumubar += (xscn->sum_diffrate_mubar);
+        toteventsnutau += (xscn->sum_diffrate_tau);
+        toteventsnutaubar += (xscn->sum_diffrate_taubar);
+    }
 
+    while (!tempQ.empty()){
+        xscn = tempQ.front();
+        tempQ.pop();
+        xscnQ.push(xscn);
+    }
+
+    outfile<<std::endl;
+	// Reset the format
+    std::cout.unsetf(ios::fixed | ios::scientific);
+
+    toteventsnue *= erecstep;
+    toteventsnumu *= erecstep;
+    toteventsnumubar *= erecstep;
+    toteventsnutau *= erecstep;
+    toteventsnutaubar *= erecstep;
 
 	totevents+=events*erecstep;
 
@@ -627,7 +531,6 @@ int main(int argc, char * argv[] )
 	// Increment bin for quenching
 
 	iq++;
-
 
   } // End of loop over Erec
 
@@ -739,10 +642,11 @@ int main(int argc, char * argv[] )
 	        int ie;
 	        for (ie=0;ie<iq;ie++) {
 
-                if (Eee[is][ie]>maxeee) {maxeee = Eee[is][ie];}
+	            if (Eee[is][ie]>maxeee) {maxeee = Eee[is][ie];}
 
 	            qisooutfile << Eee[is][ie]<< "  "<<dNdEee[is][ie]<<std::endl;
 	            _quenchedmap[is][Eee[is][ie]] = dNdEee[is][ie];
+
 	        }
 	        qisooutfile.close();
 	        v++;is++;

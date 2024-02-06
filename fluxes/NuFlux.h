@@ -26,6 +26,12 @@ class NuFlux
   double baseline; // in meters
 
  public:
+  double wnumu;
+  double wnumubar;
+  double wnue;
+  double wnuebar;
+  double wnutau;
+  double wnutaubar;
   NuFlux();
   NuFlux(const char *);
   ~NuFlux(){};
@@ -53,9 +59,6 @@ class PiDAR: public NuFlux {
  protected:
 
  public:
-  double wnumu;
-  double wnumubar;
-  double wnue;
   int convolved;
   int perpot;
   double usernorm;
